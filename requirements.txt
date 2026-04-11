@@ -1,4 +1,3 @@
-text
 # Main Web Framework
 streamlit
 
