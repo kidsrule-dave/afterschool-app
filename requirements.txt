@@ -1,0 +1,12 @@
+text
+# Main Web Framework
+streamlit
+
+# Data Analysis
+pandas
+
+# Database Connection (Latest Version: 2.28.3)
+supabase
+
+# Digital Signatures Component
+streamlit-drawable-canvas
