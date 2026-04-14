@@ -64,56 +64,54 @@ elif page == "Attendance":
         names = [k['name'] for k in kids.data]
         sel_kids = st.multiselect("Select Children for Bulk In", names)
         if st.button("Process Bulk In"):
+            today_str = str(datetime.now().date())
             for n in sel_kids:
                 supabase.table("attendance").insert({
                     "name": n, 
-                    "date": str(datetime.now().date()), 
+                    "date": today_str, 
                     "session": "Afterschool", 
                     "check_in": datetime.now().strftime("%H:%M:%S")
                 }).execute()
             st.rerun()
 
     with tab2:
-        # Fetch active records. Note: .is_() uses the value "null" as a string for PostgREST
-        active = supabase.table("attendance") \
-            .select("*, children!inner(location, allergies)") \
-            .is_("check_out", "null") \
-            .execute()
+        # Step 1: Fetch active attendance (No complex join)
+        active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
         
-        # Filter for current site
-        site_logs = [a for a in active.data if a['children']['location'] == sel_site]
+        # Step 2: Fetch children data for the site to cross-reference
+        children_res = supabase.table("children").select("name", "location", "allergies").eq("location", sel_site).execute()
         
+        # Create a lookup map for the site's children
+        site_children = {c['name']: c for c in children_res.data}
+        
+        # Step 3: Manually filter attendance for this site
+        site_logs = []
+        for a in active_res.data:
+            if a['name'] in site_children:
+                a['child_info'] = site_children[a['name']]
+                site_logs.append(a)
+
         if not site_logs:
-            st.info("No children currently checked in at this site.")
+            st.info(f"No children currently checked in at {sel_site}.")
         
         for log in site_logs:
             with st.expander(f"Sign-Out: {log['name']}"):
-                # Use .get() to prevent errors if allergies column is empty
-                allergy_info = log['children'].get('allergies', 'None recorded')
-                st.warning(f"Allergy Alert: {allergy_info}")
+                allergy_alert = log['child_info'].get('allergies', 'None recorded')
+                st.warning(f"Allergy Alert: {allergy_alert}")
                 
                 note = st.text_input("Notes", key=f"note_{log['id']}")
-                
-                canvas_res = st_canvas(
-                    height=150, 
-                    width=400, 
-                    key=f"sig_{log['id']}", 
-                    drawing_mode="freedraw",
-                    display_toolbar=True
-                )
+                canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
                 
                 if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
                     now_time = datetime.now().strftime("%H:%M:%S")
                     rounded_h = ncs_round(log['check_in'], now_time)
-                    
                     supabase.table("attendance").update({
                         "check_out": now_time, 
                         "hours": rounded_h, 
                         "notes": note, 
                         "signature_captured": True
                     }).eq("id", log['id']).execute()
-                    
-                    st.success(f"{log['name']} checked out.")
+                    st.success(f"{log['name']} checked out successfully!")
                     st.rerun()
 # --- 6. NCS 8-WEEK TRACKER ---
 elif page == "NCS Compliance":
