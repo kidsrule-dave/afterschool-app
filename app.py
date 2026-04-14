@@ -202,8 +202,8 @@ elif page == "Quick-Tap Board":
                 st.toast(f"{first_name} Checked In!")
                 st.rerun()
 else:
-               # List of collector options
-collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
+    # List of collector options
+    collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
 
     with st.expander(f"Sign-Out: {log['name']}"):
     st.warning(f"Allergy Alert: {log['child_info'].get('allergies', 'None')}")
