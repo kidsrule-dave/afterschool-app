@@ -97,44 +97,37 @@ elif page == "Attendance":
             else:
                 st.error("Please select a name first.")
     with tab2:
-        # Step 1: Fetch active attendance (No complex join)
-        active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
-        
-        # Step 2: Fetch children data for the site to cross-reference
-        children_res = supabase.table("children").select("name", "location", "allergies").eq("location", sel_site).execute()
-        
-        # Create a lookup map for the site's children
-        site_children = {c['name']: c for c in children_res.data}
-        
-        # Step 3: Manually filter attendance for this site
-        site_logs = []
-        for a in active_res.data:
-            if a['name'] in site_children:
-                a['child_info'] = site_children[a['name']]
-                site_logs.append(a)
+        # List of collector options
+collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
 
-        if not site_logs:
-            st.info(f"No children currently checked in at {sel_site}.")
-        
-        for log in site_logs:
-            with st.expander(f"Sign-Out: {log['name']}"):
-                allergy_alert = log['child_info'].get('allergies', 'None recorded')
-                st.warning(f"Allergy Alert: {allergy_alert}")
-                
-                note = st.text_input("Notes", key=f"note_{log['id']}")
-                canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
-                
-                if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
-                    now_time = datetime.now().strftime("%H:%M:%S")
-                    rounded_h = ncs_round(log['check_in'], now_time)
-                    supabase.table("attendance").update({
-                        "check_out": now_time, 
-                        "hours": rounded_h, 
-                        "notes": note, 
-                        "signature_captured": True
-                    }).eq("id", log['id']).execute()
-                    st.success(f"{log['name']} checked out successfully!")
-                    st.rerun()
+with st.expander(f"Sign-Out: {log['name']}"):
+    st.warning(f"Allergy Alert: {log['child_info'].get('allergies', 'None')}")
+    
+    # Selection for who is collecting
+    collector = st.pills("Who is collecting?", collector_types, key=f"coll_{log['id']}")
+    note = st.text_input("Notes", key=f"note_{log['id']}")
+    
+    # Signature Canvas
+    canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
+    
+    if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
+        if not collector:
+            st.error("Please select who collected the child.")
+        else:
+            now_time = datetime.now().strftime("%H:%M:%S")
+            rounded_h = ncs_round(log['check_in'], now_time)
+            
+            # Update Database with 'collected_by'
+            supabase.table("attendance").update({
+                "check_out": now_time, 
+                "hours": rounded_h, 
+                "notes": note,
+                "collected_by": collector,  # Save the selection
+                "signature_captured": True
+            }).eq("id", log['id']).execute()
+            
+            st.success(f"Done! {log['name']} collected by {collector}.")
+            st.rerun()
 # --- 6. NCS 8-WEEK TRACKER ---
 elif page == "NCS Compliance":
     st.title("⚖️ 8-Week Under-Attendance Tracker")
@@ -236,16 +229,34 @@ elif page == "Quick-Tap Board":
                 st.toast(f"{first_name} Checked In!")
                 st.rerun()
             else:
-                # SIGN OUT
-                # Find the record to update
-                record = supabase.table("attendance").select("id, check_in").eq("name", name).is_("check_out", "null").execute()
-                if record.data:
-                    rec = record.data[0]
-                    now_time = datetime.now().strftime("%H:%M:%S")
-                    rounded_h = ncs_round(rec['check_in'], now_time)
-                    supabase.table("attendance").update({
-                        "check_out": now_time, 
-                        "hours": rounded_h
-                    }).eq("id", rec['id']).execute()
-                    st.toast(f"{first_name} Checked Out!")
-                    st.rerun()
+               # List of collector options
+collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
+
+with st.expander(f"Sign-Out: {log['name']}"):
+    st.warning(f"Allergy Alert: {log['child_info'].get('allergies', 'None')}")
+    
+    # Selection for who is collecting
+    collector = st.pills("Who is collecting?", collector_types, key=f"coll_{log['id']}")
+    note = st.text_input("Notes", key=f"note_{log['id']}")
+    
+    # Signature Canvas
+    canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
+    
+    if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
+        if not collector:
+            st.error("Please select who collected the child.")
+        else:
+            now_time = datetime.now().strftime("%H:%M:%S")
+            rounded_h = ncs_round(log['check_in'], now_time)
+            
+            # Update Database with 'collected_by'
+            supabase.table("attendance").update({
+                "check_out": now_time, 
+                "hours": rounded_h, 
+                "notes": note,
+                "collected_by": collector,  # Save the selection
+                "signature_captured": True
+            }).eq("id", log['id']).execute()
+            
+            st.success(f"Done! {log['name']} collected by {collector}.")
+            st.rerun()
