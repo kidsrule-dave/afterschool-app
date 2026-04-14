@@ -205,7 +205,7 @@ elif page == "Quick-Tap Board":
                # List of collector options
 collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
 
-with st.expander(f"Sign-Out: {log['name']}"):
+    with st.expander(f"Sign-Out: {log['name']}"):
     st.warning(f"Allergy Alert: {log['child_info'].get('allergies', 'None')}")
     
     # Selection for who is collecting
