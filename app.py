@@ -55,8 +55,10 @@ if page == "Dashboard":
         st.sidebar.success("Shift started!")
 
 # --- 5. ATTENDANCE & SIGNATURES ---
-  st.title("📍 Daily Log")
+ elif page == "Attendance":
+    st.title("📍 Daily Log")
     tab1, tab2 = st.tabs(["🚌 Bulk Bus Arrival", "👤 Check-Out & Sign"])
+    
     with tab1:
         kids = supabase.table("children").select("name").eq("location", sel_site).execute()
         names = [k['name'] for k in kids.data]
@@ -72,18 +74,17 @@ if page == "Dashboard":
             st.rerun()
 
     with tab2:
+        # Corrected query syntax and indentation
         active = supabase.table("attendance") \
             .select("*, children!inner(location, allergies)") \
             .is_("check_out", "null") \
             .execute()
+        
+        # Ensure 'site_logs' line is inside the 'with tab2' block
         site_logs = [a for a in active.data if a['children']['location'] == sel_site]
         
         for log in site_logs:
-             site_logs = [a for a in active.data if a['children']['location'] == sel_site]
-        
-        for log in site_logs:
             with st.expander(f"Sign-Out: {log['name']}"):
-                # Accessing joined data: log['children']['allergies']
                 st.warning(f"Allergy Alert: {log['children'].get('allergies', 'None')}")
                 note = st.text_input("Notes", key=f"note_{log['id']}")
                 canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
