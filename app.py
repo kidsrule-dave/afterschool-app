@@ -124,38 +124,47 @@ elif page == "Admin Settings":
             st.success("Enrolled Successfully")
 
 # --- 8. REPORTS ---
-elif page == "Admin Settings": # Or whatever your report page is called
+elif page == "Dashboard":
     st.header("📊 Daily Attendance Report")
     report_date = st.date_input("Select Date for Report", datetime.now())
 
+    # Trigger logic: Fetch data and store it in session state
     if st.button("Generate Report"):
-        # 1. Fetch attendance
         att_res = supabase.table("attendance").select("*").eq("date", str(report_date)).execute()
-        
-        # 2. Fetch children for the site
         kids_res = supabase.table("children").select("name").eq("location", sel_site).execute()
         site_kid_names = [k['name'] for k in kids_res.data]
         
-        # 3. Create the list (This creates the 'report_data' variable)
-        report_data = [row for row in att_res.data if row['name'] in site_kid_names]
-        
-        # 4. Use the list IMMEDIATELY inside the same button block
-        if report_data:
-            report_df = pd.DataFrame(report_data)
-            
-            # Make sure 'collected_by' is included if you added it to Supabase
-            cols_to_show = ["name", "check_in", "check_out", "hours"]
-            if "collected_by" in report_df.columns:
-                cols_to_show.append("collected_by")
-            
-            final_df = report_df[cols_to_show]
-            st.dataframe(final_df, use_container_width=True)
-            
-            csv = final_df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download CSV", csv, f"Report_{report_date}.csv", "text/csv")
-        else:
-            st.warning("No records found for this date.")
+        # Filter and save to session state
+        st.session_state.report_data = [row for row in att_res.data if row['name'] in site_kid_names]
 
+    # Persistent Display: Shows as long as report_data exists in session state
+    if "report_data" in st.session_state and st.session_state.report_data:
+        report_df = pd.DataFrame(st.session_state.report_data)
+        
+        # Define columns to show
+        cols_to_show = ["name", "check_in", "check_out", "hours"]
+        if "collected_by" in report_df.columns:
+            cols_to_show.append("collected_by")
+            
+        final_df = report_df[cols_to_show]
+        final_df.columns = [c.replace("_", " ").title() for c in final_df.columns]
+        
+        st.dataframe(final_df, use_container_width=True)
+        
+        # The download button is now stable because it's outside the "Generate" if-block
+        csv = final_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download CSV for Excel",
+            data=csv,
+            file_name=f"Attendance_Report_{report_date}.csv",
+            mime="text/csv"
+        )
+        
+        if st.button("Clear Report View"):
+            del st.session_state.report_data
+            st.rerun()
+    elif "report_data" in st.session_state:
+        st.warning("No records found for this date.")
 # --- 9. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Attendance")
