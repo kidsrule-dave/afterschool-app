@@ -171,66 +171,63 @@ if st.button("Generate Report"):
 # --- 9. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Attendance")
-    st.info(f"Showing children for: **{sel_site}**")
+    collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
 
-    # 1. Fetch all children for this site
+    # 1. Fetch children for site
     kids_res = supabase.table("children").select("name").eq("location", sel_site).execute()
     all_kids = sorted([k['name'] for k in kids_res.data])
 
-    # 2. Get currently checked-in children to know who is 'IN'
+    # 2. Get active attendance
     active_res = supabase.table("attendance").select("name").is_("check_out", "null").execute()
     checked_in_names = [a['name'] for a in active_res.data]
 
-    # 3. Create the Grid (4 children per row)
+    # 3. The Grid
     cols = st.columns(4)
     for i, name in enumerate(all_kids):
-        first_name = name.split()[0] # Get just the first name for the button
         is_in = name in checked_in_names
-        
-        # Style: Green for present, Grey for absent
-        btn_label = f"🟢 {first_name}" if is_in else f"⚪ {first_name}"
+        btn_label = f"🟢 {name.split()[0]}" if is_in else f"⚪ {name.split()[0]}"
         
         if cols[i % 4].button(btn_label, key=f"tap_{name}", use_container_width=True):
             if not is_in:
                 # SIGN IN
                 supabase.table("attendance").insert({
-                    "name": name, 
-                    "date": str(datetime.now().date()), 
-                    "session": "Afterschool", 
-                    "check_in": datetime.now().strftime("%H:%M:%S")
+                    "name": name, "date": str(datetime.now().date()), 
+                    "session": "Afterschool", "check_in": datetime.now().strftime("%H:%M:%S")
                 }).execute()
-                st.toast(f"{first_name} Checked In!")
                 st.rerun()
-else:
-    # List of collector options
-    collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
+            else:
+                # Set session state to show collector options for this specific child
+                st.session_state["signing_out_child"] = name
 
-    with
-        st.expander(f"Sign-Out: {log['name']}"):
-        st.warning(f"Allergy Alert: {log['child_info'].get('allergies', 'None')}")
-    
-    # Selection for who is collecting
-    collector = st.pills("Who is collecting?", collector_types, key=f"coll_{log['id']}")
-    note = st.text_input("Notes", key=f"note_{log['id']}")
-    
-    # Signature Canvas
-    canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
-    
-    if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
-        if not collector:
-            st.error("Please select who collected the child.")
-        else:
-            now_time = datetime.now().strftime("%H:%M:%S")
-            rounded_h = ncs_round(log['check_in'], now_time)
+    # 4. Collection Flow (Triggers when a child is tapped for Sign-Out)
+    if "signing_out_child" in st.session_state:
+        child_name = st.session_state["signing_out_child"]
+        st.divider()
+        with st.container(border=True):
+            st.subheader(f"Confirm Collection: {child_name}")
+            col_choice = st.pills("Who is collecting?", collector_types, key="pills_coll")
             
-            # Update Database with 'collected_by'
-            supabase.table("attendance").update({
-                "check_out": now_time, 
-                "hours": rounded_h, 
-                "notes": note,
-                "collected_by": collector,  # Save the selection
-                "signature_captured": True
-            }).eq("id", log['id']).execute()
+            c1, c2 = st.columns(2)
+            if c1.button("Finalize Sign-Out", type="primary", use_container_width=True):
+                if col_choice:
+                    # Find the record to update
+                    record = supabase.table("attendance").select("id, check_in").eq("name", child_name).is_("check_out", "null").execute()
+                    if record.data:
+                        rec = record.data[0]
+                        now_time = datetime.now().strftime("%H:%M:%S")
+                        rounded_h = ncs_round(rec['check_in'], now_time)
+                        supabase.table("attendance").update({
+                            "check_out": now_time, 
+                            "hours": rounded_h,
+                            "collected_by": col_choice
+                        }).eq("id", rec['id']).execute()
+                        
+                        del st.session_state["signing_out_child"]
+                        st.success(f"{child_name} collected by {col_choice}")
+                        st.rerun()
+                else:
+                    st.error("Please select a collector first!")
             
-            st.success(f"Done! {log['name']} collected by {collector}.")
-            st.rerun()
+            if c2.button("Cancel", use_container_width=True):
+                del st.session_state["signing_out_child"]
+                st.rerun()
