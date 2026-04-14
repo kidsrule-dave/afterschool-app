@@ -201,7 +201,7 @@ elif page == "Quick-Tap Board":
                 }).execute()
                 st.toast(f"{first_name} Checked In!")
                 st.rerun()
-            else:
+else:
                # List of collector options
 collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
 
