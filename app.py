@@ -57,77 +57,50 @@ if page == "Dashboard":
 # --- 5. ATTENDANCE & SIGNATURES ---
 elif page == "Attendance":
     st.title("📍 Daily Log")
+    # Define this at the top of the page so it's ready to use
+    collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
+    
     tab1, tab2 = st.tabs(["🚌 Bulk Bus Arrival", "👤 Check-Out & Sign"])
     
-    with tab1:
-        kids = supabase.table("children").select("name").eq("location", sel_site).execute()
-        names = sorted([k['name'] for k in kids.data]) # Sorted for easier searching
-        
-        # --- Existing Bulk Section ---
-        st.subheader("🚌 Bulk Bus Arrival")
-        sel_kids = st.multiselect("Select Children for Bulk In", names)
-        if st.button("Process Bulk In"):
-            today_str = str(datetime.now().date())
-            for n in sel_kids:
-                supabase.table("attendance").insert({
-                    "name": n, 
-                    "date": today_str, 
-                    "session": "Afterschool", 
-                    "check_in": datetime.now().strftime("%H:%M:%S")
-                }).execute()
-            st.success(f"Successfully checked in {len(sel_kids)} children.")
-            st.rerun()
+    # ... (Keep Tab 1 as it is) ...
 
-        st.divider() # Adds a clean visual line between sections
-
-        # --- New Single Child Section ---
-        st.subheader("👤 Single Child Arrival")
-        single_kid = st.selectbox("Search for a child", names, index=None, placeholder="Start typing name...")
-        
-        if st.button("Check-In Single Child", type="secondary"):
-            if single_kid:
-                supabase.table("attendance").insert({
-                    "name": single_kid, 
-                    "date": str(datetime.now().date()), 
-                    "session": "Afterschool", 
-                    "check_in": datetime.now().strftime("%H:%M:%S")
-                }).execute()
-                st.success(f"{single_kid} is now checked in.")
-                st.rerun()
-            else:
-                st.error("Please select a name first.")
     with tab2:
-        # List of collector options
-collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
+        # (Your existing fetch logic here...)
+        active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
+        children_res = supabase.table("children").select("name", "location", "allergies").eq("location", sel_site).execute()
+        site_children = {c['name']: c for c in children_res.data}
+        
+        site_logs = []
+        for a in active_res.data:
+            if a['name'] in site_children:
+                a['child_info'] = site_children[a['name']]
+                site_logs.append(a)
 
-with st.expander(f"Sign-Out: {log['name']}"):
-    st.warning(f"Allergy Alert: {log['child_info'].get('allergies', 'None')}")
-    
-    # Selection for who is collecting
-    collector = st.pills("Who is collecting?", collector_types, key=f"coll_{log['id']}")
-    note = st.text_input("Notes", key=f"note_{log['id']}")
-    
-    # Signature Canvas
-    canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
-    
-    if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
-        if not collector:
-            st.error("Please select who collected the child.")
-        else:
-            now_time = datetime.now().strftime("%H:%M:%S")
-            rounded_h = ncs_round(log['check_in'], now_time)
-            
-            # Update Database with 'collected_by'
-            supabase.table("attendance").update({
-                "check_out": now_time, 
-                "hours": rounded_h, 
-                "notes": note,
-                "collected_by": collector,  # Save the selection
-                "signature_captured": True
-            }).eq("id", log['id']).execute()
-            
-            st.success(f"Done! {log['name']} collected by {collector}.")
-            st.rerun()
+        for log in site_logs:
+            with st.expander(f"Sign-Out: {log['name']}"):
+                # ALL LINES BELOW MUST BE INDENTED 4 SPACES FROM 'WITH'
+                st.warning(f"Allergy Alert: {log['child_info'].get('allergies', 'None')}")
+                
+                # Use st.selectbox if st.pills isn't working on your version
+                collector = st.selectbox("Who is collecting?", collector_types, key=f"coll_{log['id']}", index=None)
+                
+                note = st.text_input("Notes", key=f"note_{log['id']}")
+                canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
+                
+                if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
+                    if not collector:
+                        st.error("Please select a collector.")
+                    else:
+                        now_time = datetime.now().strftime("%H:%M:%S")
+                        rounded_h = ncs_round(log['check_in'], now_time)
+                        supabase.table("attendance").update({
+                            "check_out": now_time, 
+                            "hours": rounded_h, 
+                            "notes": note,
+                            "collected_by": collector,
+                            "signature_captured": True
+                        }).eq("id", log['id']).execute()
+                        st.rerun()
 # --- 6. NCS 8-WEEK TRACKER ---
 elif page == "NCS Compliance":
     st.title("⚖️ 8-Week Under-Attendance Tracker")
