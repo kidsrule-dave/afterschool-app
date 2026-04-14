@@ -171,7 +171,7 @@ else:
 
 
 # --- 9. QUICK-TAP BOARD ---
-elif page == "Quick-Tap Board":
+elif page == "Admin Settings":
     st.title("🔘 Quick-Tap Attendance")
     collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
 
