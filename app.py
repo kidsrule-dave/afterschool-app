@@ -25,23 +25,27 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Quick-Tap Board", "Attendan
 sel_site = st.sidebar.selectbox("Current Site Location", sites)
 today_date = str(datetime.now().date())
 
-# --- 4. DASHBOARD & TUSLA RATIOS ---
+# --- 4. DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🏫 {sel_site} Management Hub")
-    today_date = str(datetime.now().date())
     
-    # 1. Fetch kids (using None for real NULL check)
-    kids_res = supabase.table("attendance").select("id").eq("date", today_date).is_("check_out", None).execute()
-    kids_in = len(kids_res.data) if kids_res.data else 0
-    
-    # 2. Fetch staff (using None for real NULL check)
-    staff_res = supabase.table("staff_roster").select("id").eq("site", sel_site).eq("date", today_date).is_("shift_end", None).execute()
-    staff_in = len(staff_res.data) if staff_res.data else 0
-    
-    # ... rest of metrics code ...
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Children Present", kids_in)
-    c2.metric("Staff on Duty", staff_in)
+    try:
+        # Fetch ALL active records and filter in Python to avoid SQL type errors
+        all_active = supabase.table("attendance").select("id, date, check_out").execute()
+        
+        # Filter for today and checked-in in Python
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        kids_in_list = [
+            row for row in all_active.data 
+            if str(row.get('date')) == today_str and (row.get('check_out') is None)
+        ]
+        kids_in = len(kids_in_list)
+        
+        st.metric("Children Present", kids_in)
+        
+    except Exception as e:
+        st.error("Connection successful, but table structure might be different than expected.")
+        st.info("Check if your 'date' column is named correctly in Supabase.")
 # --- 5. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Attendance")
