@@ -159,12 +159,12 @@ if report_data:
     st.dataframe(report_df, use_container_width=True)
 
         
-        csv = report_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Download CSV for Excel",
-            data=csv,
-            file_name=f"Report_{sel_site}_{report_date}.csv",
-            mime="text/csv",
+    csv = report_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Download CSV for Excel",
+        data=csv,
+        file_name=f"Report_{sel_site}_{report_date}.csv",
+        mime="text/csv",
         )
     else:
         st.warning(f"No records found for {sel_site} on {report_date}.")
