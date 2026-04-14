@@ -1,113 +1,117 @@
 import streamlit as st
 import pandas as pd
 import math
-import hashlib
 from datetime import datetime, timedelta
 from supabase import create_client, Client
 from streamlit_drawable_canvas import st_canvas
 
-# --- CONNECT TO SUPABASE ---
-# Replace these with your actual keys from Supabase Settings > API
-URL = "https://wwofdtdjpprvtzjmqgbk.supabase.co"
-KEY = "sb_publishable_HFSxcJjKT8c0M1_UoFLznA_J6HzGbdm"
-supabase: Client = create_client(URL, KEY)
+# --- 1. SECURE CONNECTION ---
+SUPABASE_URL = "YOUR_SUPABASE_URL"
+SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def hash_pw(pw):
-    return hashlib.sha256(pw.encode()).hexdigest()
+# --- 2. UTILS ---
+def ncs_round(check_in, check_out):
+    """NCS Rule: Round part hours per day UP to the next whole hour."""
+    fmt = "%H:%M:%S"
+    start = datetime.strptime(check_in, fmt)
+    end = datetime.strptime(check_out, fmt)
+    actual_hours = (end - start).total_seconds() / 3600
+    return math.ceil(actual_hours)
 
-# --- APP START ---
-st.set_page_config(page_title="Roscommon Afterschool", layout="wide")
+# --- 3. NAVIGATION & SITE SELECTOR ---
+# Note: Since login is removed, we default 'user' to a generic 'Staff' or 'Admin'
+if 'user' not in st.session_state:
+    st.session_state['user'] = "Staff_User"
 
-if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = False
+sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
+page = st.sidebar.radio("Navigation", ["Dashboard", "Attendance", "NCS Compliance", "Admin Settings"])
+sel_site = st.sidebar.selectbox("Current Site Location", sites)
 
-if not st.session_state['logged_in']:
-    st.title("Staff Login")
-    u = st.text_input("Username")
-    p = st.text_input("Password", type="password")
-    if st.button("Login"):
-        res = supabase.table("staff").select("*").eq("username", u).eq("password", hash_pw(p)).execute()
-        if res.data:
-            st.session_state['logged_in'] = True
-            st.session_state['user'] = u
+# --- 4. DASHBOARD & TUSLA RATIOS ---
+if page == "Dashboard":
+    st.title(f"🏫 {sel_site} Management Hub")
+    today = str(datetime.now().date())
+    
+    # Live Stats & Ratios
+    kids_in = supabase.table("attendance").select("id", count="exact").eq("date", today).is_("check_out", "NULL").execute().count
+    staff_in = supabase.table("staff_roster").select("id", count="exact").eq("site", sel_site).eq("date", today).is_("shift_end", "NULL").execute().count
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Children Present", kids_in)
+    c2.metric("Staff on Duty", staff_in)
+    
+    req_staff = math.ceil(kids_in / 12) if kids_in > 0 else 0
+    status = "✅ Compliant" if staff_in >= req_staff else "🚨 UNDERSTAFFED"
+    c3.metric("Tusla 1:12 Status", status)
+
+    if st.sidebar.button("⏰ Clock In for Shift"):
+        supabase.table("staff_roster").insert({
+            "username": st.session_state['user'], 
+            "site": sel_site, 
+            "date": today, 
+            "shift_start": datetime.now().strftime("%H:%M:%S")
+        }).execute()
+        st.sidebar.success("Shift started!")
+
+# --- 5. ATTENDANCE & SIGNATURES ---
+elif page == "Attendance":
+    st.title("📍 Daily Log")
+    tab1, tab2 = st.tabs(["🚌 Bulk Bus Arrival", "👤 Check-Out & Sign"])
+    
+    with tab1:
+        kids = supabase.table("children").select("name").eq("location", sel_site).execute()
+        names = [k['name'] for k in kids.data]
+        sel_kids = st.multiselect("Select Children for Bulk In", names)
+        if st.button("Process Bulk In"):
+            for n in sel_kids:
+                supabase.table("attendance").insert({
+                    "name": n, 
+                    "date": str(datetime.now().date()), 
+                    "session": "Afterschool", 
+                    "check_in": datetime.now().strftime("%H:%M:%S")
+                }).execute()
             st.rerun()
-        else: st.error("Access Denied")
 
-else:
-    sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
-    page = st.sidebar.radio("Navigation", ["Dashboard", "Attendance", "Billing & Enrollment", "Audit Mode"])
-    sel_site = st.sidebar.selectbox("Current Site", sites)
-
-    # --- DASHBOARD & TUSLA RATIOS ---
-    if page == "Dashboard":
-        st.title(f"🏫 {sel_site} Dashboard")
-        today = str(datetime.now().date())
-        
-        # Live Stats
-        kids_in = supabase.table("attendance").select("id", count="exact").eq("date", today).is_("check_out", "NULL").execute()
-        staff_in = supabase.table("staff_roster").select("id", count="exact").eq("site", sel_site).eq("date", today).is_("shift_end", "NULL").execute()
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Children Present", kids_in.count)
-        c2.metric("Staff on Duty", staff_in.count)
-        
-        req_staff = math.ceil(kids_in.count / 12) if kids_in.count > 0 else 0
-        status = "✅ Compliant" if staff_in.count >= req_staff else "🚨 Understaffed (Ratio 1:12)"
-        c3.metric("Tusla Status", status)
-
-        if st.button("⏰ Clock In for Shift"):
-            supabase.table("staff_roster").insert({"username": st.session_state['user'], "site": sel_site, "date": today, "shift_start": datetime.now().strftime("%H:%M:%S")}).execute()
-            st.success("Clocked in!")
-
-    # --- ATTENDANCE & NCS ROUNDING ---
-    elif page == "Attendance":
-        st.title("📍 Daily Attendance")
-        
-        # Bulk Check-In
-        with st.expander("🚌 Bulk Bus Arrival"):
-            kids = supabase.table("children").select("name").eq("location", sel_site).execute()
-            names = [k['name'] for k in kids.data]
-            sel_kids = st.multiselect("Select Children", names)
-            if st.button("Check In Group"):
-                for n in sel_kids:
-                    supabase.table("attendance").insert({"name": n, "date": str(datetime.now().date()), "session": "Afterschool", "check_in": datetime.now().strftime("%H:%M:%S")}).execute()
-                st.rerun()
-
-        st.divider()
-        # Individual Out with NCS Rounding
+    with tab2:
         active = supabase.table("attendance").select("*, children!inner(location, allergies)").is_("check_out", "NULL").execute()
         site_logs = [a for a in active.data if a['children']['location'] == sel_site]
         
         for log in site_logs:
-            col_n, col_o = st.columns([3, 1])
-            col_n.write(f"**{log['name']}** (In: {log['check_in']})")
-            if col_o.button("OUT", key=log['id']):
-                # NCS Rounding Rule (math.ceil)
-                t1 = datetime.strptime(log['check_in'], "%H:%M:%S")
-                t2 = datetime.now()
-                actual = (t2 - t1).total_seconds() / 3600
-                rounded = math.ceil(actual)
+            with st.expander(f"Sign-Out: {log['name']}"):
+                st.warning(f"Allergy Alert: {log['children']['allergies']}")
+                note = st.text_input("Notes", key=f"note_{log['id']}")
+                canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
                 
-                supabase.table("attendance").update({"check_out": t2.strftime("%H:%M:%S"), "hours": rounded, "signature_captured": True}).eq("id", log['id']).execute()
-                st.rerun()
+                if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
+                    now_time = datetime.now().strftime("%H:%M:%S")
+                    rounded_h = ncs_round(log['check_in'], now_time)
+                    supabase.table("attendance").update({
+                        "check_out": now_time, 
+                        "hours": rounded_h, 
+                        "notes": note, 
+                        "signature_captured": True
+                    }).eq("id", log['id']).execute()
+                    st.rerun()
 
-    # --- BILLING, NCS & ENROLLMENT ---
-    elif page == "Billing & Enrollment":
-        st.title("📊 Enrollment & NCS")
-        with st.form("enroll"):
-            name = st.text_input("Full Name")
-            chick = st.text_input("NCS Number (CHICK)")
-            reg = st.number_input("Registered Weekly Hours", value=20)
-            p_email = st.text_input("Parent Email")
-            if st.form_submit_button("Enroll Child"):
-                supabase.table("children").insert({"name": name, "location": sel_site, "ncs_number": chick, "registered_hours": reg, "parent_email": p_email}).execute()
-                st.success("Child Added")
+# --- 6. NCS 8-WEEK TRACKER ---
+elif page == "NCS Compliance":
+    st.title("⚖️ 8-Week Under-Attendance Tracker")
+    st.info("Monitors consecutive weeks below registered hours.")
 
-    # --- AUDIT MODE ---
-    elif page == "Audit Mode":
-        st.title("🛡️ Inspector Audit Mode")
-        start = st.date_input("Start Date")
-        end = st.date_input("End Date")
-        if st.button("Generate Inspection Table"):
-            res = supabase.table("attendance").select("*, children!inner(ncs_number)").gte("date", str(start)).lte("date", str(end)).execute()
-            st.table(pd.DataFrame(res.data))
+# --- 7. ADMIN & EXEMPTIONS ---
+elif page == "Admin Settings":
+    st.title("⚙️ System Management")
+    with st.form("enroll"):
+        st.subheader("Enroll New Child")
+        n = st.text_input("Full Name")
+        c = st.text_input("NCS CHICK Number")
+        h = st.number_input("Registered Weekly Hours", value=20)
+        if st.form_submit_button("Save Record"):
+            supabase.table("children").insert({
+                "name": n, 
+                "location": sel_site, 
+                "ncs_number": c, 
+                "registered_hours": h
+            }).execute()
+            st.success("Enrolled Successfully")
