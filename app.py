@@ -34,8 +34,8 @@ if page == "Dashboard":
     today = str(datetime.now().date())
     
     # Live Stats & Ratios
-    kids_in = supabase.table("attendance").select("id", count="exact").eq("date", today).is_("check_out", "NULL").execute().count
-    staff_in = supabase.table("staff_roster").select("id", count="exact").eq("site", sel_site).eq("date", today).is_("shift_end", "NULL").execute().count
+    kids_in = supabase.table("attendance").select("id", count="exact").eq("date", today).is_("check_out", "null").execute().count
+    staff_in = supabase.table("staff_roster").select("id", count="exact").eq("site", sel_site).eq("date", today).is_("shift_end", "null").execute().count
     
     c1, c2, c3 = st.columns(3)
     c1.metric("Children Present", kids_in)
@@ -75,11 +75,10 @@ elif page == "Attendance":
 
     with tab2:
         # Corrected query syntax and indentation
-        active = supabase.table("attendance") \
-            .select("*, children!inner(location, allergies)") \
-            .is_("check_out", "null") \
-            .execute()
-        
+    active = supabase.table("attendance") \
+    .select("*, children!inner(location, allergies)") \
+    .is_("check_out", "null") \
+    .execute()
         # Ensure 'site_logs' line is inside the 'with tab2' block
         site_logs = [a for a in active.data if a['children']['location'] == sel_site]
         
