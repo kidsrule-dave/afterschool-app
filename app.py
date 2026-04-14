@@ -25,27 +25,18 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Quick-Tap Board", "Attendan
 sel_site = st.sidebar.selectbox("Current Site Location", sites)
 today_date = str(datetime.now().date())
 
-# --- 4. DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🏫 {sel_site} Management Hub")
     
     try:
-        # Fetch ALL active records and filter in Python to avoid SQL type errors
-        all_active = supabase.table("attendance").select("id, date, check_out").execute()
-        
-        # Filter for today and checked-in in Python
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        kids_in_list = [
-            row for row in all_active.data 
-            if str(row.get('date')) == today_str and (row.get('check_out') is None)
-        ]
-        kids_in = len(kids_in_list)
-        
-        st.metric("Children Present", kids_in)
-        
+        all_active = supabase.table("attendance").select("*").limit(1).execute()
+        if all_active.data:
+            st.write("Columns found in your database:", list(all_active.data[0].keys()))
+        else:
+            st.warning("The attendance table is empty.")
+            
     except Exception as e:
-        st.error("Connection successful, but table structure might be different than expected.")
-        st.info("Check if your 'date' column is named correctly in Supabase.")
+        st.error(f"Error: {e}")
 # --- 5. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Attendance")
