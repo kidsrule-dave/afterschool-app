@@ -147,7 +147,7 @@ if st.button("Generate Report"):
         .eq("date", str(report_date)) \
         .execute()
     
-    # 2. Fetch children belonging to the current site
+    # 2. Fetch list of children belonging to the current site
     kids_res = supabase.table("children") \
         .select("name") \
         .eq("location", sel_site) \
@@ -156,14 +156,14 @@ if st.button("Generate Report"):
     # Create a list of names for filtering
     site_kid_names = [k['name'] for k in kids_res.data]
     
-    # 3. Filter the data (matching att_res with site_kid_names)
+    # 3. Match attendance data with the site's children
     report_data = [row for row in att_res.data if row['name'] in site_kid_names]
     
-    # --- FIXED LINE BELOW (Checking report_data instead of res.data) ---
+    # Check 'report_data' (the filtered list) instead of 'res.data'
     if report_data:
         report_df = pd.DataFrame(report_data)
         
-        # Clean up columns for the user
+        # Select and rename columns for the final report
         report_df = report_df[["name", "check_in", "check_out", "hours"]]
         report_df.columns = ["Child Name", "Arrival", "Departure", "NCS Hours"]
         
