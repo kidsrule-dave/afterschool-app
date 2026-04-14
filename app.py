@@ -138,17 +138,48 @@ elif page == "Admin Settings":
 # --- 8. REPORTS ---
 st.header("📊 Daily Attendance Report")
 
-# Date selector for the report
 report_date = st.date_input("Select Date for Report", datetime.now())
 
 if st.button("Generate Report"):
-    # Fetch all records for the selected site and date
-    # We use children!inner to ensure we only get kids belonging to 'sel_site'
-    res = supabase.table("attendance") \
-        .select("name, check_in, check_out, hours, children!inner(location)") \
+    # 1. Fetch all attendance records for that day (no join)
+    att_res = supabase.table("attendance") \
+        .select("name, check_in, check_out, hours") \
         .eq("date", str(report_date)) \
-        .eq("children.location", sel_site) \
         .execute()
+    
+    # 2. Fetch children names that belong to the current site
+    kids_res = supabase.table("children") \
+        .select("name") \
+        .eq("location", sel_site) \
+        .execute()
+    
+    # Create a list of names belonging to this site
+    site_kid_names = [k['name'] for k in kids_res.data]
+    
+    # 3. Filter the attendance list to only include kids from this site
+    report_data = [row for row in att_res.data if row['name'] in site_kid_names]
+    
+    if report_data:
+        # Convert to DataFrame
+        report_df = pd.DataFrame(report_data)
+        
+        # Reorder and rename columns for the CSV
+        report_df = report_df[["name", "check_in", "check_out", "hours"]]
+        report_df.columns = ["Child Name", "Arrival", "Departure", "NCS Hours"]
+        
+        # Preview
+        st.dataframe(report_df, use_container_width=True)
+        
+        # Download Button
+        csv = report_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download CSV for Excel",
+            data=csv,
+            file_name=f"Report_{sel_site}_{report_date}.csv",
+            mime="text/csv",
+        )
+    else:
+        st.warning(f"No records found for {sel_site} on {report_date}.")
     
     if res.data:
         # Convert to a clean DataFrame for display
