@@ -157,7 +157,7 @@ elif page == "Admin Settings": # Or whatever your report page is called
             st.warning("No records found for this date.")
 
 # --- 9. QUICK-TAP BOARD ---
-elif page == "Admin Settings":
+elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Attendance")
     collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
 
