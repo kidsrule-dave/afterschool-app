@@ -124,47 +124,48 @@ elif page == "Admin Settings":
             st.success("Enrolled Successfully")
 
 # --- 8. REPORTS ---
-elif page == "Attendance":
+elif page == "Admin Settings": # Ensure this matches your sidebar name
     st.header("📊 Daily Attendance Report")
     report_date = st.date_input("Select Date for Report", datetime.now())
 
-    # Trigger logic: Fetch data and store it in session state
+    # 1. THE TRIGGER: Only the data fetching happens inside the button
     if st.button("Generate Report"):
         att_res = supabase.table("attendance").select("*").eq("date", str(report_date)).execute()
         kids_res = supabase.table("children").select("name").eq("location", sel_site).execute()
         site_kid_names = [k['name'] for k in kids_res.data]
         
-        # Filter and save to session state
-        st.session_state.report_data = [row for row in att_res.data if row['name'] in site_kid_names]
+        # We save the results to the app's memory (session_state)
+        st.session_state.current_report = [row for row in att_res.data if row['name'] in site_kid_names]
 
-    # Persistent Display: Shows as long as report_data exists in session state
-    if "report_data" in st.session_state and st.session_state.report_data:
-        report_df = pd.DataFrame(st.session_state.report_data)
+    # 2. THE PERMANENT VIEW: This stays visible even if you click other buttons
+    if "current_report" in st.session_state and st.session_state.current_report:
+        report_df = pd.DataFrame(st.session_state.current_report)
         
-        # Define columns to show
-        cols_to_show = ["name", "check_in", "check_out", "hours"]
+        # Clean up columns for the report
+        display_cols = ["name", "check_in", "check_out", "hours"]
         if "collected_by" in report_df.columns:
-            cols_to_show.append("collected_by")
+            display_cols.append("collected_by")
             
-        final_df = report_df[cols_to_show]
-        final_df.columns = [c.replace("_", " ").title() for c in final_df.columns]
+        final_df = report_df[display_cols]
+        final_df.columns = ["Child Name", "Arrival", "Departure", "Hours", "Collected By"][:len(display_cols)]
         
         st.dataframe(final_df, use_container_width=True)
         
-        # The download button is now stable because it's outside the "Generate" if-block
+        # This button will NO LONGER disappear because it's not nested!
         csv = final_df.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Download CSV for Excel",
             data=csv,
-            file_name=f"Attendance_Report_{report_date}.csv",
+            file_name=f"Attendance_{sel_site}_{report_date}.csv",
             mime="text/csv"
         )
         
-        if st.button("Clear Report View"):
-            del st.session_state.report_data
+        if st.button("Reset View"):
+            del st.session_state.current_report
             st.rerun()
-    elif "report_data" in st.session_state:
-        st.warning("No records found for this date.")
+            
+    elif "current_report" in st.session_state:
+        st.warning("No records found for this date and site.")
 # --- 9. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Attendance")
