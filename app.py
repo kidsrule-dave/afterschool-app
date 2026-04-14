@@ -30,24 +30,18 @@ if page == "Dashboard":
     st.title(f"🏫 {sel_site} Management Hub")
     today_date = str(datetime.now().date())
     
-    # 1. Fetch kids who are checked in (check_out is null)
-    # We fetch the list and use len() to get the count
-    kids_res = supabase.table("attendance").select("id").eq("date", today_date).is_("check_out", "null").execute()
+    # 1. Fetch kids (using None for real NULL check)
+    kids_res = supabase.table("attendance").select("id").eq("date", today_date).is_("check_out", None).execute()
     kids_in = len(kids_res.data) if kids_res.data else 0
     
-    # 2. Fetch staff who are clocked in (shift_end is null)
-    staff_res = supabase.table("staff_roster").select("id").eq("site", sel_site).eq("date", today_date).is_("shift_end", "null").execute()
+    # 2. Fetch staff (using None for real NULL check)
+    staff_res = supabase.table("staff_roster").select("id").eq("site", sel_site).eq("date", today_date).is_("shift_end", None).execute()
     staff_in = len(staff_res.data) if staff_res.data else 0
     
-    # 3. Display Metrics
+    # ... rest of metrics code ...
     c1, c2, c3 = st.columns(3)
     c1.metric("Children Present", kids_in)
     c2.metric("Staff on Duty", staff_in)
-    
-    # 4. Tusla Ratios
-    req_staff = math.ceil(kids_in / 12) if kids_in > 0 else 0
-    status = "✅ Compliant" if staff_in >= req_staff else "🚨 UNDERSTAFFED"
-    c3.metric("Tusla 1:12 Status", status)
 # --- 5. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Attendance")
