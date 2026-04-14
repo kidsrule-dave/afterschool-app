@@ -74,7 +74,10 @@ elif page == "Attendance":
             st.rerun()
 
     with tab2:
-        active = supabase.table("attendance").select("*, children!inner(location, allergies)").is_("check_out", "NULL").execute()
+        active = supabase.table("attendance") \
+    .select("*, children!inner(location, allergies)") \
+    .is_("check_out", "null") \
+    .execute()
         site_logs = [a for a in active.data if a['children']['location'] == sel_site]
         
         for log in site_logs:
