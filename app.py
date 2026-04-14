@@ -124,51 +124,37 @@ elif page == "Admin Settings":
             st.success("Enrolled Successfully")
 
 # --- 8. REPORTS ---
-st.header("📊 Daily Attendance Report")
+elif page == "Admin Settings": # Or whatever your report page is called
+    st.header("📊 Daily Attendance Report")
+    report_date = st.date_input("Select Date for Report", datetime.now())
 
-report_date = st.date_input("Select Date for Report", datetime.now())
-
-if st.button("Generate Report"):
-    # 1. Fetch attendance records for that day
-    att_res = supabase.table("attendance") \
-        .select("name, check_in, check_out, hours") \
-        .eq("date", str(report_date)) \
-        .execute()
-    
-    # 2. Fetch list of children belonging to the current site
-    kids_res = supabase.table("children") \
-        .select("name") \
-        .eq("location", sel_site) \
-        .execute()
-    
-    # Create a list of names for filtering
-    site_kid_names = [k['name'] for k in kids_res.data]
-    
-    # 3. Match attendance data with the site's children
-    report_data = [row for row in att_res.data if row['name'] in site_kid_names]
-    
-    # Check 'report_data' (the filtered list) instead of 'res.data'
-if report_data:
-    report_df = pd.DataFrame(report_data)
-    
-    # Include 'collected_by' in the column selection
-    # Ensure 'collected_by' is in your .select() query at the top of the report section
-    report_df = report_df[["name", "check_in", "check_out", "hours", "collected_by"]]
-    report_df.columns = ["Child Name", "Arrival", "Departure", "NCS Hours", "Collected By"]
-    
-    st.dataframe(report_df, use_container_width=True)
-
+    if st.button("Generate Report"):
+        # 1. Fetch attendance
+        att_res = supabase.table("attendance").select("*").eq("date", str(report_date)).execute()
         
-    csv = report_df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Download CSV for Excel",
-        data=csv,
-        file_name=f"Report_{sel_site}_{report_date}.csv",
-        mime="text/csv",
-        )
-elif page == "Admin Settings":
-    st.warning(f"No records found for {sel_site} on {report_date}.")
-
+        # 2. Fetch children for the site
+        kids_res = supabase.table("children").select("name").eq("location", sel_site).execute()
+        site_kid_names = [k['name'] for k in kids_res.data]
+        
+        # 3. Create the list (This creates the 'report_data' variable)
+        report_data = [row for row in att_res.data if row['name'] in site_kid_names]
+        
+        # 4. Use the list IMMEDIATELY inside the same button block
+        if report_data:
+            report_df = pd.DataFrame(report_data)
+            
+            # Make sure 'collected_by' is included if you added it to Supabase
+            cols_to_show = ["name", "check_in", "check_out", "hours"]
+            if "collected_by" in report_df.columns:
+                cols_to_show.append("collected_by")
+            
+            final_df = report_df[cols_to_show]
+            st.dataframe(final_df, use_container_width=True)
+            
+            csv = final_df.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download CSV", csv, f"Report_{report_date}.csv", "text/csv")
+        else:
+            st.warning("No records found for this date.")
 
 # --- 9. QUICK-TAP BOARD ---
 elif page == "Admin Settings":
