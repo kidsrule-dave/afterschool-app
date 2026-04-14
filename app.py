@@ -205,8 +205,9 @@ else:
     # List of collector options
     collector_types = ["Mom", "Dad", "Brother", "Sister", "Nan", "Grandad", "Aunty", "Uncle", "Family Friend"]
 
-    with st.expander(f"Sign-Out: {log['name']}"):
-    st.warning(f"Allergy Alert: {log['child_info'].get('allergies', 'None')}")
+    with
+        st.expander(f"Sign-Out: {log['name']}"):
+        st.warning(f"Allergy Alert: {log['child_info'].get('allergies', 'None')}")
     
     # Selection for who is collecting
     collector = st.pills("Who is collecting?", collector_types, key=f"coll_{log['id']}")
