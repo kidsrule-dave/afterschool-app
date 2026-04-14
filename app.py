@@ -59,7 +59,7 @@ elif page == "Attendance":
     st.title("📍 Daily Log")
     tab1, tab2 = st.tabs(["🚌 Bulk Bus Arrival", "👤 Check-Out & Sign"])
     
-   with tab1:
+    with tab1:
         kids = supabase.table("children").select("name").eq("location", sel_site).execute()
         names = sorted([k['name'] for k in kids.data]) # Sorted for easier searching
         
