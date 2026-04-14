@@ -75,20 +75,20 @@ elif page == "Attendance":
 
     with tab2:
         # Corrected query syntax and indentation
-    active = supabase.table("attendance") \
-    .select("*, children!inner(location, allergies)") \
-    .is_("check_out", "null") \
-    .execute()
+        active = supabase.table("attendance") \
+        .select("*, children!inner(location, allergies)") \
+        .is_("check_out", "null") \
+        .execute()
         # Ensure 'site_logs' line is inside the 'with tab2' block
         site_logs = [a for a in active.data if a['children']['location'] == sel_site]
         
         for log in site_logs:
-            with st.expander(f"Sign-Out: {log['name']}"):
-                st.warning(f"Allergy Alert: {log['children'].get('allergies', 'None')}")
-                note = st.text_input("Notes", key=f"note_{log['id']}")
-                canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
+        with st.expander(f"Sign-Out: {log['name']}"):
+        st.warning(f"Allergy Alert: {log['children'].get('allergies', 'None')}")
+        note = st.text_input("Notes", key=f"note_{log['id']}")
+        canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
                 
-                if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
+        if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
                     now_time = datetime.now().strftime("%H:%M:%S")
                     rounded_h = ncs_round(log['check_in'], now_time)
                     supabase.table("attendance").update({
