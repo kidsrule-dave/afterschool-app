@@ -200,3 +200,51 @@ if st.button("Generate Report"):
         )
     else:
         st.warning(f"No records found for {sel_site} on {report_date}.")
+
+
+# --- 9. QUICK-TAP ATTENDANCE BOARD ---
+elif page == "Quick-Tap Board":
+    st.title("🔘 Quick-Tap Attendance")
+    st.info("Tap a child's name to toggle their status.")
+
+    # 1. Get all children for this site
+    kids_res = supabase.table("children").select("name").eq("location", sel_site).execute()
+    all_kids = sorted([k['name'] for k in kids_res.data])
+
+    # 2. Get currently checked-in children to know who is 'IN'
+    active_res = supabase.table("attendance").select("name").is_("check_out", "null").execute()
+    checked_in_names = [a['name'] for a in active_res.data]
+
+    # 3. Create a Grid (4 buttons per row)
+    cols = st.columns(4)
+    for i, name in enumerate(all_kids):
+        first_name = name.split()[0] # Display only the first name
+        is_in = name in checked_in_names
+        
+        # Style the button: Green if present, Grey if absent
+        btn_label = f"🟢 {first_name}" if is_in else f"⚪ {first_name}"
+        
+        # Place button in the correct column
+        if cols[i % 4].button(btn_label, key=f"btn_{name}", use_container_width=True):
+            if not is_in:
+                # SIGN IN LOGIC
+                supabase.table("attendance").insert({
+                    "name": name, 
+                    "date": str(datetime.now().date()), 
+                    "session": "Afterschool", 
+                    "check_in": datetime.now().strftime("%H:%M:%S")
+                }).execute()
+                st.toast(f"{first_name} Checked In!")
+            else:
+                # SIGN OUT LOGIC (Find the active record ID first)
+                record = supabase.table("attendance").select("id, check_in").eq("name", name).is_("check_out", "null").execute()
+                if record.data:
+                    now_time = datetime.now().strftime("%H:%M:%S")
+                    rounded_h = ncs_round(record.data[0]['check_in'], now_time)
+                    supabase.table("attendance").update({
+                        "check_out": now_time, 
+                        "hours": rounded_h
+                    }).eq("id", record.data[0]['id']).execute()
+                    st.toast(f"{first_name} Checked Out!")
+            
+            st.rerun()
