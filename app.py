@@ -134,3 +134,22 @@ elif page == "Admin Settings":
                 "registered_hours": h
             }).execute()
             st.success("Enrolled Successfully")
+
+# --- 8. REPORTS ---
+st.header("📊 Daily Attendance Report")
+
+# Date selector for the report
+report_date = st.date_input("Select Date for Report", datetime.now())
+
+if st.button("Generate Report"):
+    # Fetch all records for the selected site and date
+    # We use children!inner to ensure we only get kids belonging to 'sel_site'
+    res = supabase.table("attendance") \
+        .select("name, check_in, check_out, hours, children!inner(location)") \
+        .eq("date", str(report_date)) \
+        .eq("children.location", sel_site) \
+        .execute()
+    
+    if res.data:
+        # Convert to a clean DataFrame for display
+        df = pd.DataFrame(res.data)
