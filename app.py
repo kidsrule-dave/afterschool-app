@@ -124,7 +124,7 @@ elif page == "Admin Settings":
             st.success("Enrolled Successfully")
 
 # --- 8. REPORTS ---
-elif page == "Dashboard":
+elif page == "Attendance":
     st.header("📊 Daily Attendance Report")
     report_date = st.date_input("Select Date for Report", datetime.now())
 
