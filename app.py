@@ -148,14 +148,16 @@ if st.button("Generate Report"):
     report_data = [row for row in att_res.data if row['name'] in site_kid_names]
     
     # Check 'report_data' (the filtered list) instead of 'res.data'
-    if report_data:
-        report_df = pd.DataFrame(report_data)
-        
-        # Select and rename columns for the final report
-        report_df = report_df[["name", "check_in", "check_out", "hours"]]
-        report_df.columns = ["Child Name", "Arrival", "Departure", "NCS Hours"]
-        
-        st.dataframe(report_df, use_container_width=True)
+if report_data:
+    report_df = pd.DataFrame(report_data)
+    
+    # Include 'collected_by' in the column selection
+    # Ensure 'collected_by' is in your .select() query at the top of the report section
+    report_df = report_df[["name", "check_in", "check_out", "hours", "collected_by"]]
+    report_df.columns = ["Child Name", "Arrival", "Departure", "NCS Hours", "Collected By"]
+    
+    st.dataframe(report_df, use_container_width=True)
+
         
         csv = report_df.to_csv(index=False).encode('utf-8')
         st.download_button(
