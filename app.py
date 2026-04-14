@@ -59,9 +59,12 @@ elif page == "Attendance":
     st.title("📍 Daily Log")
     tab1, tab2 = st.tabs(["🚌 Bulk Bus Arrival", "👤 Check-Out & Sign"])
     
-    with tab1:
+  with tab1:
         kids = supabase.table("children").select("name").eq("location", sel_site).execute()
-        names = [k['name'] for k in kids.data]
+        names = sorted([k['name'] for k in kids.data]) # Sorted for easier searching
+        
+        # --- Existing Bulk Section ---
+        st.subheader("🚌 Bulk Bus Arrival")
         sel_kids = st.multiselect("Select Children for Bulk In", names)
         if st.button("Process Bulk In"):
             today_str = str(datetime.now().date())
@@ -72,8 +75,27 @@ elif page == "Attendance":
                     "session": "Afterschool", 
                     "check_in": datetime.now().strftime("%H:%M:%S")
                 }).execute()
+            st.success(f"Successfully checked in {len(sel_kids)} children.")
             st.rerun()
 
+        st.divider() # Adds a clean visual line between sections
+
+        # --- New Single Child Section ---
+        st.subheader("👤 Single Child Arrival")
+        single_kid = st.selectbox("Search for a child", names, index=None, placeholder="Start typing name...")
+        
+        if st.button("Check-In Single Child", type="secondary"):
+            if single_kid:
+                supabase.table("attendance").insert({
+                    "name": single_kid, 
+                    "date": str(datetime.now().date()), 
+                    "session": "Afterschool", 
+                    "check_in": datetime.now().strftime("%H:%M:%S")
+                }).execute()
+                st.success(f"{single_kid} is now checked in.")
+                st.rerun()
+            else:
+                st.error("Please select a name first.")
     with tab2:
         # Step 1: Fetch active attendance (No complex join)
         active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
