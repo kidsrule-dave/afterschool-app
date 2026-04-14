@@ -25,7 +25,7 @@ if 'user' not in st.session_state:
     st.session_state['user'] = "Staff_User"
 
 sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
-page = st.sidebar.radio("Navigation", ["Dashboard", "Attendance", "NCS Compliance", "Admin Settings"])
+page = st.sidebar.radio("Navigation", ["Dashboard", "Quick-Tap Board", "Attendance", "NCS Compliance", "Admin Settings"])
 sel_site = st.sidebar.selectbox("Current Site Location", sites)
 
 # --- 4. DASHBOARD & TUSLA RATIOS ---
@@ -202,12 +202,12 @@ if st.button("Generate Report"):
         st.warning(f"No records found for {sel_site} on {report_date}.")
 
 
-# --- 9. QUICK-TAP ATTENDANCE BOARD ---
+# --- 9. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Attendance")
-    st.info("Tap a child's name to toggle their status.")
+    st.info(f"Showing children for: **{sel_site}**")
 
-    # 1. Get all children for this site
+    # 1. Fetch all children for this site
     kids_res = supabase.table("children").select("name").eq("location", sel_site).execute()
     all_kids = sorted([k['name'] for k in kids_res.data])
 
@@ -215,19 +215,18 @@ elif page == "Quick-Tap Board":
     active_res = supabase.table("attendance").select("name").is_("check_out", "null").execute()
     checked_in_names = [a['name'] for a in active_res.data]
 
-    # 3. Create a Grid (4 buttons per row)
+    # 3. Create the Grid (4 children per row)
     cols = st.columns(4)
     for i, name in enumerate(all_kids):
-        first_name = name.split()[0] # Display only the first name
+        first_name = name.split()[0] # Get just the first name for the button
         is_in = name in checked_in_names
         
-        # Style the button: Green if present, Grey if absent
+        # Style: Green for present, Grey for absent
         btn_label = f"🟢 {first_name}" if is_in else f"⚪ {first_name}"
         
-        # Place button in the correct column
-        if cols[i % 4].button(btn_label, key=f"btn_{name}", use_container_width=True):
+        if cols[i % 4].button(btn_label, key=f"tap_{name}", use_container_width=True):
             if not is_in:
-                # SIGN IN LOGIC
+                # SIGN IN
                 supabase.table("attendance").insert({
                     "name": name, 
                     "date": str(datetime.now().date()), 
@@ -235,16 +234,18 @@ elif page == "Quick-Tap Board":
                     "check_in": datetime.now().strftime("%H:%M:%S")
                 }).execute()
                 st.toast(f"{first_name} Checked In!")
+                st.rerun()
             else:
-                # SIGN OUT LOGIC (Find the active record ID first)
+                # SIGN OUT
+                # Find the record to update
                 record = supabase.table("attendance").select("id, check_in").eq("name", name).is_("check_out", "null").execute()
                 if record.data:
+                    rec = record.data[0]
                     now_time = datetime.now().strftime("%H:%M:%S")
-                    rounded_h = ncs_round(record.data[0]['check_in'], now_time)
+                    rounded_h = ncs_round(rec['check_in'], now_time)
                     supabase.table("attendance").update({
                         "check_out": now_time, 
                         "hours": rounded_h
-                    }).eq("id", record.data[0]['id']).execute()
+                    }).eq("id", rec['id']).execute()
                     st.toast(f"{first_name} Checked Out!")
-            
-            st.rerun()
+                    st.rerun()
