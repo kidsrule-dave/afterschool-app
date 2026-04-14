@@ -55,7 +55,7 @@ if page == "Dashboard":
         st.sidebar.success("Shift started!")
 
 # --- 5. ATTENDANCE & SIGNATURES ---
- elif page == "Attendance":
+elif page == "Attendance":
     st.title("📍 Daily Log")
     tab1, tab2 = st.tabs(["🚌 Bulk Bus Arrival", "👤 Check-Out & Sign"])
     
