@@ -141,36 +141,34 @@ st.header("📊 Daily Attendance Report")
 report_date = st.date_input("Select Date for Report", datetime.now())
 
 if st.button("Generate Report"):
-    # 1. Fetch all attendance records for that day (no join)
+    # 1. Fetch attendance records for that day
     att_res = supabase.table("attendance") \
         .select("name, check_in, check_out, hours") \
         .eq("date", str(report_date)) \
         .execute()
     
-    # 2. Fetch children names that belong to the current site
+    # 2. Fetch children belonging to the current site
     kids_res = supabase.table("children") \
         .select("name") \
         .eq("location", sel_site) \
         .execute()
     
-    # Create a list of names belonging to this site
+    # Create a list of names for filtering
     site_kid_names = [k['name'] for k in kids_res.data]
     
-    # 3. Filter the attendance list to only include kids from this site
+    # 3. Filter the data (matching att_res with site_kid_names)
     report_data = [row for row in att_res.data if row['name'] in site_kid_names]
     
+    # --- FIXED LINE BELOW (Checking report_data instead of res.data) ---
     if report_data:
-        # Convert to DataFrame
         report_df = pd.DataFrame(report_data)
         
-        # Reorder and rename columns for the CSV
+        # Clean up columns for the user
         report_df = report_df[["name", "check_in", "check_out", "hours"]]
         report_df.columns = ["Child Name", "Arrival", "Departure", "NCS Hours"]
         
-        # Preview
         st.dataframe(report_df, use_container_width=True)
         
-        # Download Button
         csv = report_df.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Download CSV for Excel",
@@ -180,7 +178,3 @@ if st.button("Generate Report"):
         )
     else:
         st.warning(f"No records found for {sel_site} on {report_date}.")
-    
-    if res.data:
-        # Convert to a clean DataFrame for display
-        df = pd.DataFrame(res.data)
