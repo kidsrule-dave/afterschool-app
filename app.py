@@ -166,7 +166,7 @@ if report_data:
         file_name=f"Report_{sel_site}_{report_date}.csv",
         mime="text/csv",
         )
-else:
+elif page == "Admin Settings":
     st.warning(f"No records found for {sel_site} on {report_date}.")
 
 
