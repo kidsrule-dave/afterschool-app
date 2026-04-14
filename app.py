@@ -74,31 +74,47 @@ elif page == "Attendance":
             st.rerun()
 
     with tab2:
-        # Corrected query syntax and indentation
+        # Fetch active records. Note: .is_() uses the value "null" as a string for PostgREST
         active = supabase.table("attendance") \
-        .select("*, children!inner(location, allergies)") \
-        .is_("check_out", "null") \
-        .execute()
-        # Ensure 'site_logs' line is inside the 'with tab2' block
+            .select("*, children!inner(location, allergies)") \
+            .is_("check_out", "null") \
+            .execute()
+        
+        # Filter for current site
         site_logs = [a for a in active.data if a['children']['location'] == sel_site]
         
+        if not site_logs:
+            st.info("No children currently checked in at this site.")
+        
         for log in site_logs:
-        with st.expander(f"Sign-Out: {log['name']}"):
-        st.warning(f"Allergy Alert: {log['children'].get('allergies', 'None')}")
-        note = st.text_input("Notes", key=f"note_{log['id']}")
-        canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
+            with st.expander(f"Sign-Out: {log['name']}"):
+                # Use .get() to prevent errors if allergies column is empty
+                allergy_info = log['children'].get('allergies', 'None recorded')
+                st.warning(f"Allergy Alert: {allergy_info}")
                 
-        if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
+                note = st.text_input("Notes", key=f"note_{log['id']}")
+                
+                canvas_res = st_canvas(
+                    height=150, 
+                    width=400, 
+                    key=f"sig_{log['id']}", 
+                    drawing_mode="freedraw",
+                    display_toolbar=True
+                )
+                
+                if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
                     now_time = datetime.now().strftime("%H:%M:%S")
                     rounded_h = ncs_round(log['check_in'], now_time)
+                    
                     supabase.table("attendance").update({
                         "check_out": now_time, 
                         "hours": rounded_h, 
                         "notes": note, 
                         "signature_captured": True
                     }).eq("id", log['id']).execute()
+                    
+                    st.success(f"{log['name']} checked out.")
                     st.rerun()
-
 # --- 6. NCS 8-WEEK TRACKER ---
 elif page == "NCS Compliance":
     st.title("⚖️ 8-Week Under-Attendance Tracker")
