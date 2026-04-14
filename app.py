@@ -25,23 +25,29 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Quick-Tap Board", "Attendan
 sel_site = st.sidebar.selectbox("Current Site Location", sites)
 today_date = str(datetime.now().date())
 
-# --- 4. DASHBOARD ---
+# --- 4. DASHBOARD & TUSLA RATIOS ---
 if page == "Dashboard":
     st.title(f"🏫 {sel_site} Management Hub")
     today_date = str(datetime.now().date())
     
-    # CORRECTED: Use .is_("check_out", "null") as required by PostgREST or try .is_("check_out", None)
-    # The count="exact" must be inside select() for the Python library
-    res_kids = supabase.table("attendance").select("id", count="exact").eq("date", today_date).is_("check_out", "null").execute()
-    kids_count = res_kids.count if res_kids.count is not None else 0
+    # 1. Fetch kids who are checked in (check_out is null)
+    # We fetch the list and use len() to get the count
+    kids_res = supabase.table("attendance").select("id").eq("date", today_date).is_("check_out", "null").execute()
+    kids_in = len(kids_res.data) if kids_res.data else 0
     
-    res_staff = supabase.table("staff_roster").select("id", count="exact").eq("site", sel_site).eq("date", today_date).is_("shift_end", "null").execute()
-    staff_count = res_staff.count if res_staff.count is not None else 0
+    # 2. Fetch staff who are clocked in (shift_end is null)
+    staff_res = supabase.table("staff_roster").select("id").eq("site", sel_site).eq("date", today_date).is_("shift_end", "null").execute()
+    staff_in = len(staff_res.data) if staff_res.data else 0
     
+    # 3. Display Metrics
     c1, c2, c3 = st.columns(3)
-    c1.metric("Children Present", kids_count)
-    c2.metric("Staff on Duty", staff_count)
-
+    c1.metric("Children Present", kids_in)
+    c2.metric("Staff on Duty", staff_in)
+    
+    # 4. Tusla Ratios
+    req_staff = math.ceil(kids_in / 12) if kids_in > 0 else 0
+    status = "✅ Compliant" if staff_in >= req_staff else "🚨 UNDERSTAFFED"
+    c3.metric("Tusla 1:12 Status", status)
 # --- 5. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Attendance")
