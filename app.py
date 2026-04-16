@@ -82,26 +82,47 @@ elif page == "Attendance" or page == "Quick-Tap Board":
         if not site_logs:
             st.info(f"No children currently checked in at {sel_site}.")
         
+        # This loop must contain indented blocks
         for log in site_logs:
-    with st.expander(f"Sign-Out: {log['name']}"):
-        st.warning(f"Allergy Alert: {site_children[log['name']].get('allergies', 'None')}")
-        
-        # 1. Track the collector for this specific child
-        c_key = f"coll_{log['id']}"
-        if c_key not in st.session_state:
-            st.session_state[c_key] = None
-        
-        st.write("### Collected By:")
-        collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
-        
-        # Create the grid
-        cols = st.columns(4)
-        for i, p in enumerate(collectors):
-            # Highlight the button if it was the one selected
-            button_type = "primary" if st.session_state[c_key] == p else "secondary"
-            if cols[i % 4].button(p, key=f"btn_{p}_{log['id']}", type=button_type):
-                st.session_state[c_key] = p
-                st.rerun() # Immediately rerun to show the "highlighted" state
+            with st.expander(f"Sign-Out: {log['name']}"):
+                # All code below must be indented further than 'with'
+                st.warning(f"Allergy Alert: {site_children[log['name']].get('allergies', 'None')}")
+                
+                # --- Collected By Buttons ---
+                st.write("### Collected By:")
+                collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
+                c_key = f"coll_{log['id']}"
+                if c_key not in st.session_state: 
+                    st.session_state[c_key] = None
+                
+                cols = st.columns(4)
+                for i, p in enumerate(collectors):
+                    button_type = "primary" if st.session_state[c_key] == p else "secondary"
+                    if cols[i % 4].button(p, key=f"btn_{p}_{log['id']}", type=button_type):
+                        st.session_state[c_key] = p
+                        st.rerun()
+                
+                if st.session_state[c_key]:
+                    st.success(f"Selected: {st.session_state[c_key]}")
+
+                note = st.text_input("Notes", key=f"note_{log['id']}")
+                canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
+                
+                if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
+                    if not st.session_state[c_key]:
+                        st.error("Please tap a collector first!")
+                    else:
+                        now_time = datetime.now().strftime("%H:%M:%S")
+                        rounded_h = ncs_round(log['check_in'], now_time)
+                        full_note = f"Collected by {st.session_state[c_key]}. {note}"
+                        supabase.table("attendance").update({
+                            "check_out": now_time, 
+                            "hours": rounded_h, 
+                            "notes": full_note, 
+                            "signature_captured": True
+                        }).eq("id", log['id']).execute()
+                        del st.session_state[c_key]
+                        st.rerun()
         
         # Display the selection clearly
         if st.session_state[c_key]:
