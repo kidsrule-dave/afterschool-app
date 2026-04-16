@@ -6,7 +6,7 @@ from supabase import create_client, Client
 from streamlit_drawable_canvas import st_canvas
 
 # --- 1. SECURE CONNECTION ---
-SUPABASE_URL = "https://supabase.co"
+SUPABASE_URL = "https://wwofdtdjpprvtzjmqgbk.supabase.co"
 SUPABASE_KEY = "sb_publishable_HFSxcJjKT8c0M1_UoFLznA_J6HzGbdm"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
