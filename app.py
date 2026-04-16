@@ -116,25 +116,49 @@ elif page == "Attendance":
         if not site_logs:
             st.info(f"No children currently checked in at {sel_site}.")
         
-        for log in site_logs:
-            with st.expander(f"Sign-Out: {log['name']}"):
-                allergy_alert = log['child_info'].get('allergies', 'None recorded')
-                st.warning(f"Allergy Alert: {allergy_alert}")
+        # Inside the for loop where you handle sign-outs:
+for log in site_logs:
+    with st.expander(f"Sign-Out: {log['name']}"):
+        st.warning(f"Allergy Alert: {log['child_info'].get('allergies', 'None recorded')}")
+        
+        # 1. ADD COLLECTED BY BUTTONS
+        st.write("### Collected By:")
+        collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
+        
+        # Use session state to track the selection for this specific child
+        collector_key = f"collector_{log['id']}"
+        if collector_key not in st.session_state:
+            st.session_state[collector_key] = "Not Selected"
+
+        # Create 4 columns for a neat 2-row grid
+        cols = st.columns(4)
+        for i, person in enumerate(collectors):
+            if cols[i % 4].button(person, key=f"btn_{person}_{log['id']}"):
+                st.session_state[collector_key] = person
+
+        st.info(f"Selected: **{st.session_state[collector_key]}**")
+
+        # 2. FINAL NOTES & SIGNATURE
+        note = st.text_input("Additional Notes", key=f"note_{log['id']}")
+        canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
+        
+        if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
+            if st.session_state[collector_key] == "Not Selected":
+                st.error("Please tap who is collecting the child first!")
+            else:
+                now_time = datetime.now().strftime("%H:%M:%S")
+                rounded_h = ncs_round(log['check_in'], now_time)
                 
-                note = st.text_input("Notes", key=f"note_{log['id']}")
-                canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
+                # Update Supabase with the collector info
+                supabase.table("attendance").update({
+                    "check_out": now_time, 
+                    "hours": rounded_h, 
+                    "notes": f"Collected by {st.session_state[collector_key]}. {note}",
+                    "signature_captured": True
+                }).eq("id", log['id']).execute()
                 
-                if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
-                    now_time = datetime.now().strftime("%H:%M:%S")
-                    rounded_h = ncs_round(log['check_in'], now_time)
-                    supabase.table("attendance").update({
-                        "check_out": now_time, 
-                        "hours": rounded_h, 
-                        "notes": note, 
-                        "signature_captured": True
-                    }).eq("id", log['id']).execute()
-                    st.success(f"{log['name']} checked out successfully!")
-                    st.rerun()
+                st.success(f"{log['name']} checked out by {st.session_state[collector_key]}!")
+                st.rerun()
 # --- 6. NCS 8-WEEK TRACKER ---
 elif page == "NCS Compliance":
     st.title("⚖️ 8-Week Under-Attendance Tracker")
