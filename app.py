@@ -40,7 +40,7 @@ elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Sign-Out")
     
     # 1. Fetch active kids at this site
-    active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
+active_res = supabase.table("attendance").select("*").is_("check_out", None).execute()
     children_res = supabase.table("children").select("name", "location").eq("location", sel_site).execute()
     site_child_names = [c['name'] for c in children_res.data]
     site_logs = [a for a in active_res.data if a['name'] in site_child_names]
