@@ -143,20 +143,44 @@ elif page == "NCS Compliance":
 # --- 7. ADMIN & EXEMPTIONS ---
 elif page == "Admin Settings":
     st.title("⚙️ System Management")
-    with st.form("enroll"):
-        st.subheader("Enroll New Child")
-        n = st.text_input("Full Name")
-        c = st.text_input("NCS CHICK Number")
-        h = st.number_input("Registered Weekly Hours", value=20)
-        if st.form_submit_button("Save Record"):
-            supabase.table("children").insert({
-                "name": n, 
-                "location": sel_site, 
-                "ncs_number": c, 
-                "registered_hours": h
-            }).execute()
-            st.success("Enrolled Successfully")
 
+    # Initialize a session state to keep the admin logged in during the session
+    if 'admin_authenticated' not in st.session_state:
+        st.session_state['admin_authenticated'] = False
+
+    if not st.session_state['admin_authenticated']:
+        # Login Form
+        st.subheader("Admin Login Required")
+        input_user = st.text_input("Username")
+        input_password = st.text_input("Password", type="password")
+        
+        if st.button("Login"):
+            if input_user == "dave" and input_password == "bonnie123":
+                st.session_state['admin_authenticated'] = True
+                st.success("Authenticated!")
+                st.rerun()
+            else:
+                st.error("Invalid Username or Password")
+    else:
+        # Logout button (optional)
+        if st.sidebar.button("Logout Admin"):
+            st.session_state['admin_authenticated'] = False
+            st.rerun()
+
+        # The rest of your Admin code stays inside this 'else' block
+        with st.form("enroll"):
+            st.subheader("Enroll New Child")
+            n = st.text_input("Full Name")
+            c = st.text_input("NCS CHICK Number")
+            h = st.number_input("Registered Weekly Hours", value=20)
+            if st.form_submit_button("Save Record"):
+                supabase.table("children").insert({
+                    "name": n, 
+                    "location": sel_site, 
+                    "ncs_number": c, 
+                    "registered_hours": h
+                }).execute()
+                st.success("Enrolled Successfully")
 # --- 8. REPORTS ---
 st.header("📊 Daily Attendance Report")
 
