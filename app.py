@@ -20,7 +20,7 @@ def ncs_round(check_in, check_out):
 
 # --- 3. NAVIGATION ---
 sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
-page = st.sidebar.radio("Navigation", ["Dashboard", "Attendance", "NCS Compliance", "Admin Settings"])
+page = st.sidebar.radio("Navigation", ["Dashboard", "Quick-Tap Board", "Attendance", "NCS Compliance", "Admin Settings"])
 sel_site = st.sidebar.selectbox("Current Site Location", sites)
 
 # --- 4. DASHBOARD ---
@@ -35,6 +35,46 @@ if page == "Dashboard":
         kids_in = 0
         
     st.metric("Children Present", kids_in)
+# --- NEW: 4b. QUICK-TAP BOARD ---
+elif page == "Quick-Tap Board":
+    st.title("🔘 Quick-Tap Sign-Out")
+    
+    # 1. Fetch active kids at this site
+    active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
+    children_res = supabase.table("children").select("name", "location").eq("location", sel_site).execute()
+    site_child_names = [c['name'] for c in children_res.data]
+    site_logs = [a for a in active_res.data if a['name'] in site_child_names]
+
+    if not site_logs:
+        st.info(f"No children currently checked in at {sel_site}.")
+    
+    for log in site_logs:
+        child_id = log['id']
+        c_key = f"coll_{child_id}"
+        current_selection = st.session_state.get(c_key)
+
+        # Creates a nice visual box for each child
+        with st.container(border=True):
+            st.subheader(f"👤 {log['name']}")
+            
+            collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
+            cols = st.columns(4)
+            for i, p in enumerate(collectors):
+                b_type = "primary" if current_selection == p else "secondary"
+                # use_container_width=True makes the buttons big and easy to tap
+                if cols[i % 4].button(p, key=f"q_tap_{p}_{child_id}", type=b_type, use_container_width=True):
+                    st.session_state[c_key] = p
+                    st.rerun()
+            
+            if current_selection:
+                if st.button(f"✅ Finalize: {current_selection} is collecting", key=f"fin_{child_id}", type="primary", use_container_width=True):
+                    now = datetime.now().strftime("%H:%M:%S")
+                    supabase.table("attendance").update({
+                        "check_out": now, 
+                        "notes": f"Quick-tap by {current_selection}"
+                    }).eq("id", child_id).execute()
+                    if c_key in st.session_state: del st.session_state[c_key]
+                    st.rerun()
 
 # --- 5. ATTENDANCE & SIGN-OUT ---
 elif page == "Attendance":
