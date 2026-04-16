@@ -32,9 +32,11 @@ if page == "Dashboard":
     st.title(f"🏫 {sel_site} Management Hub")
     today = str(datetime.now().date())
     
-    kids_in = supabase.table("attendance").select("id", count="exact").eq("date", today).is_("check_out", "null").execute().count
-    staff_in = supabase.table("staff_roster").select("id", count="exact").eq("site", sel_site).eq("date", today).is_("shift_end", "null").execute().count
+    kids_res = supabase.table("attendance").select("id", count="exact").eq("date", today).is_("check_out", None).execute()
+    kids_in = kids_res.count if kids_res.count is not None else 0
     
+    staff_res = supabase.table("staff_roster").select("id", count="exact").eq("site", sel_site).eq("date", today).is_("shift_end", None).execute()
+    staff_in = staff_res.count if staff_res.count is not None else 0
     c1, c2, c3 = st.columns(3)
     c1.metric("Children Present", kids_in)
     c2.metric("Staff on Duty", staff_in)
