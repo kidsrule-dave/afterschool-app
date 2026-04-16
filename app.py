@@ -40,7 +40,12 @@ elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Sign-Out")
     
     # 1. Fetch active kids at this site
-active_res = supabase.table("attendance").select("*").is_("check_out", None).execute()
+        # Use None instead of "null" string - this is the most common fix for this APIError
+        active_res = supabase.table("attendance").select("*").is_("check_out", None).execute()
+        site_logs = [a for a in active_res.data if a['name'] in site_child_names]
+    except Exception as e:
+        st.error(f"Database Error: {e}")
+        site_logs = []
     children_res = supabase.table("children").select("name", "location").eq("location", sel_site).execute()
     site_child_names = [c['name'] for c in children_res.data]
     site_logs = [a for a in active_res.data if a['name'] in site_child_names]
