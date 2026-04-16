@@ -92,15 +92,27 @@ elif page == "Attendance" or page == "Quick-Tap Board":
                 st.write("### Collected By:")
                 collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
                 c_key = f"coll_{log['id']}"
-                if c_key not in st.session_state: 
+                
+                # Safe initialization: Check if it exists; if not, create it
+                if c_key not in st.session_state:
                     st.session_state[c_key] = None
                 
                 cols = st.columns(4)
                 for i, p in enumerate(collectors):
-                    button_type = "primary" if st.session_state[c_key] == p else "secondary"
+                    # Use .get() to avoid KeyError if state was somehow cleared
+                    current_selection = st.session_state.get(c_key)
+                    button_type = "primary" if current_selection == p else "secondary"
+                    
                     if cols[i % 4].button(p, key=f"btn_{p}_{log['id']}", type=button_type):
                         st.session_state[c_key] = p
                         st.rerun()
+                
+                # Safe display using .get()
+                selection = st.session_state.get(c_key)
+                if selection:
+                    st.success(f"Selected: **{selection}**")
+                else:
+                    st.info("Tap who is collecting the child")
                 
                 if st.session_state[c_key]:
                     st.success(f"Selected: {st.session_state[c_key]}")
