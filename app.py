@@ -87,23 +87,24 @@ elif page == "Attendance" or page == "Quick-Tap Board":
             with st.expander(f"Sign-Out: {log['name']}"):
                 st.warning(f"Allergy Alert: {site_children[log['name']].get('allergies', 'None')}")
                 
-                # --- Collected By Section ---
-                st.write("### Collected By:")
-                collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
+                 # --- Collected By Section ---
                 c_key = f"coll_{log['id']}"
                 
-                # SAFE CHECK: Use .get() to see who is selected without crashing
+                # FIX: Use .get() to avoid the KeyError crash
                 current_selection = st.session_state.get(c_key)
+                
+                st.write("### Collected By:")
+                collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
                 
                 cols = st.columns(4)
                 for i, p in enumerate(collectors):
-                    # Highlight button if selected
+                    # FIX: Use the variable current_selection here
                     b_type = "primary" if current_selection == p else "secondary"
                     if cols[i % 4].button(p, key=f"btn_{p}_{log['id']}", type=b_type):
                         st.session_state[c_key] = p
                         st.rerun()
                 
-                # SAFE CHECK: Update the message display
+                # FIX: Use the variable current_selection here too
                 if current_selection:
                     st.success(f"Selected: **{current_selection}**")
                 else:
@@ -113,7 +114,7 @@ elif page == "Attendance" or page == "Quick-Tap Board":
                 canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
                 
                 if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
-                    # SAFE CHECK: Final validation
+                    # FIX: Check the variable, not the session state directly
                     if not current_selection:
                         st.error("Please tap a collector first!")
                     else:
@@ -128,7 +129,6 @@ elif page == "Attendance" or page == "Quick-Tap Board":
                             "signature_captured": True
                         }).eq("id", log['id']).execute()
                         
-                        # Clean up memory for this child
                         if c_key in st.session_state:
                             del st.session_state[c_key]
                         st.rerun()
