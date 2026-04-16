@@ -84,13 +84,14 @@ elif page == "Attendance" or page == "Quick-Tap Board":
         
         # This loop must contain indented blocks
         for log in site_logs:
+            # 1. Define the ID key immediately so it exists for all code below
+            child_id = log['id']
+            c_key = f"coll_{child_id}"
+            
             with st.expander(f"Sign-Out: {log['name']}"):
                 st.warning(f"Allergy Alert: {site_children[log['name']].get('allergies', 'None')}")
                 
-                 # --- Collected By Section ---
-                c_key = f"coll_{log['id']}"
-                
-                # FIX: Use .get() to avoid the KeyError crash
+                # 2. Get the current selection safely
                 current_selection = st.session_state.get(c_key)
                 
                 st.write("### Collected By:")
@@ -98,23 +99,22 @@ elif page == "Attendance" or page == "Quick-Tap Board":
                 
                 cols = st.columns(4)
                 for i, p in enumerate(collectors):
-                    # FIX: Use the variable current_selection here
+                    # Use the variable we just checked
                     b_type = "primary" if current_selection == p else "secondary"
-                    if cols[i % 4].button(p, key=f"btn_{p}_{log['id']}", type=b_type):
+                    if cols[i % 4].button(p, key=f"btn_{p}_{child_id}", type=b_type):
                         st.session_state[c_key] = p
                         st.rerun()
                 
-                # FIX: Use the variable current_selection here too
+                # 3. Use the local variable instead of session_state brackets
                 if current_selection:
                     st.success(f"Selected: **{current_selection}**")
                 else:
                     st.info("Tap who is collecting the child")
 
-                note = st.text_input("Notes", key=f"note_{log['id']}")
-                canvas_res = st_canvas(height=100, width=300, key=f"sig_{log['id']}", drawing_mode="freedraw")
+                note = st.text_input("Notes", key=f"note_{child_id}")
+                canvas_res = st_canvas(height=100, width=300, key=f"sig_{child_id}", drawing_mode="freedraw")
                 
-                if st.button("Finalize Pick-Up", key=f"out_{log['id']}", type="primary"):
-                    # FIX: Check the variable, not the session state directly
+                if st.button("Finalize Pick-Up", key=f"out_{child_id}", type="primary"):
                     if not current_selection:
                         st.error("Please tap a collector first!")
                     else:
@@ -127,7 +127,7 @@ elif page == "Attendance" or page == "Quick-Tap Board":
                             "hours": rounded_h, 
                             "notes": full_note, 
                             "signature_captured": True
-                        }).eq("id", log['id']).execute()
+                        }).eq("id", child_id).execute()
                         
                         if c_key in st.session_state:
                             del st.session_state[c_key]
