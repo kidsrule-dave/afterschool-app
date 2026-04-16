@@ -83,7 +83,7 @@ elif page == "Attendance" or page == "Quick-Tap Board":
             st.info(f"No children currently checked in at {sel_site}.")
         
         # This loop must contain indented blocks
-      for log in site_logs:
+        for log in site_logs:
             with st.expander(f"Sign-Out: {log['name']}"):
                 st.warning(f"Allergy Alert: {site_children[log['name']].get('allergies', 'None')}")
                 
