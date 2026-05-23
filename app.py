@@ -29,28 +29,28 @@ if page == "Dashboard":
     today = str(datetime.now().date())
     
     try:
+        # Check current headcount specifically filtered for this site location
         kids_res = supabase.table("attendance").select("id", count="exact").eq("date", today).is_("check_out", "null").execute()
         kids_in = kids_res.count if kids_res.count else 0
     except:
         kids_in = 0
         
-    st.metric("Children Present", kids_in)
-# --- NEW: 4b. QUICK-TAP BOARD ---
+    st.metric("Children Present Today", kids_in)
+
+# --- 5. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Sign-Out")
     
-    # 1. Fetch active kids at this site
     try:
-        # We fetch kids belonging to this site first
         children_res = supabase.table("children").select("name").eq("location", sel_site).execute()
         site_child_names = [c['name'] for c in children_res.data]
         
-        # Then we fetch only those who haven't checked out (check_out is NULL)
         active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
         site_logs = [a for a in active_res.data if a['name'] in site_child_names]
     except Exception as e:
         st.error(f"Database Error: {e}")
         site_logs = []
+
     if not site_logs:
         st.info(f"No children currently checked in at {sel_site}.")
     
@@ -59,157 +59,162 @@ elif page == "Quick-Tap Board":
         c_key = f"coll_{child_id}"
         current_selection = st.session_state.get(c_key)
 
-        # Creates a nice visual box for each child
         with st.container(border=True):
             st.subheader(f"👤 {log['name']}")
+            st.caption(f"Checked In At: {log['check_in']}")
             
             collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
             cols = st.columns(4)
             for i, p in enumerate(collectors):
                 b_type = "primary" if current_selection == p else "secondary"
-                # use_container_width=True makes the buttons big and easy to tap
                 if cols[i % 4].button(p, key=f"q_tap_{p}_{child_id}", type=b_type, use_container_width=True):
                     st.session_state[c_key] = p
                     st.rerun()
             
             if current_selection:
-                if st.button(f"✅ Finalize: {current_selection} is collecting", key=f"fin_{child_id}", type="primary", use_container_width=True):
+                if st.button(f"✅ Finalize Sign-Out ({current_selection})", key=f"fin_{child_id}", type="primary", use_container_width=True):
                     now = datetime.now().strftime("%H:%M:%S")
                     supabase.table("attendance").update({
                         "check_out": now, 
-                        "notes": f"Quick-tap by {current_selection}"
+                        "collected_by": current_selection,
+                        "hours": ncs_round(log['check_in'], now),
+                        "notes": f"Quick-tap pickup by {current_selection}"
                     }).eq("id", child_id).execute()
                     if c_key in st.session_state: del st.session_state[c_key]
                     st.rerun()
 
-# --- 5. ATTENDANCE & SIGN-OUT ---
+# --- 6. ATTENDANCE & SIGN-OUT ---
 elif page == "Attendance":
     st.title("📍 Daily Log")
-    tab1, tab2 = st.tabs(["🚌 Arrivals", "👤 Sign-Out"])
+    tab1, tab2 = st.tabs(["🚌 Arrivals (Sign In)", "👤 Departures (Sign Out)"])
     
     with tab1:
-        kids = supabase.table("children").select("name").eq("location", sel_site).execute()
-        names = sorted([k['name'] for k in kids.data])
-        sel_kids = st.multiselect("Bulk Check-In", names)
-        if st.button("Check In"):
-            for n in sel_kids:
-                supabase.table("attendance").insert({"name": n, "date": str(datetime.now().date()), "check_in": datetime.now().strftime("%H:%M:%S")}).execute()
-            st.rerun()
+        st.subheader("Sign In Children")
+        try:
+            kids = supabase.table("children").select("name").eq("location", sel_site).execute()
+            names = sorted([k['name'] for k in kids.data])
+        except Exception as e:
+            st.error(f"Could not load children: {e}")
+            names = []
+
+        if names:
+            sel_kids = st.multiselect("Select children to Check-In:", names)
+            if st.button("Confirm Check In", type="primary"):
+                if sel_kids:
+                    for n in sel_kids:
+                        supabase.table("attendance").insert({
+                            "name": n, 
+                            "date": str(datetime.now().date()), 
+                            "check_in": datetime.now().strftime("%H:%M:%S")
+                        }).execute()
+                    st.success(f"Successfully checked in {len(sel_kids)} children!")
+                    st.rerun()
+                else:
+                    st.warning("Please select at least one child.")
+        else:
+            st.info("No children registered at this site yet. Go to Admin Settings to register them.")
 
     with tab2:
-        active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
-        children_res = supabase.table("children").select("name", "location", "allergies").eq("location", sel_site).execute()
-        site_children = {c['name']: c for c in children_res.data}
-        site_logs = [a for a in active_res.data if a['name'] in site_children]
+        st.subheader("Sign Out Children")
+        try:
+            active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
+            children_res = supabase.table("children").select("name", "location").eq("location", sel_site).execute()
+            site_children = {c['name']: c for c in children_res.data}
+            site_logs = [a for a in active_res.data if a['name'] in site_children]
+        except Exception as e:
+            site_logs = []
+
+        if not site_logs:
+            st.info("No active check-ins found for this location.")
 
         for log in site_logs:
             child_id = log['id']
             c_key = f"coll_{child_id}"
             
-            with st.expander(f"Sign-Out: {log['name']}"):
-                # SAFE CHECK: Use .get() to avoid the KeyError
+            with st.expander(f"Sign-Out Profile: {log['name']} (In: {log['check_in']})"):
                 current_selection = st.session_state.get(c_key)
                 
-                st.write("### Collected By:")
+                st.write("**Who is collecting the child?**")
                 collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
                 cols = st.columns(4)
                 for i, p in enumerate(collectors):
                     b_type = "primary" if current_selection == p else "secondary"
-                    if cols[i % 4].button(p, key=f"btn_{p}_{child_id}", type=b_type):
+                    if cols[i % 4].button(p, key=f"btn_{p}_{child_id}", type=b_type, use_container_width=True):
                         st.session_state[c_key] = p
                         st.rerun()
                 
                 if current_selection:
-                    st.success(f"Selected: {current_selection}")
+                    st.success(f"Selected Collector: {current_selection}")
                 
-                note = st.text_input("Notes", key=f"note_{child_id}")
+                note = st.text_input("Additional Notes (e.g. Medication, Mood)", key=f"note_{child_id}")
+                st.write("Authorized Signature:")
                 st_canvas(height=100, width=300, key=f"sig_{child_id}", drawing_mode="freedraw")
                 
-                if st.button("Finalize", key=f"out_{child_id}", type="primary"):
+                if st.button("Complete Sign-Out Process", key=f"out_{child_id}", type="primary", use_container_width=True):
                     if not current_selection:
-                        st.error("Select a collector!")
+                        st.error("⚠️ System requires you to select a collector before submitting!")
                     else:
                         now = datetime.now().strftime("%H:%M:%S")
                         supabase.table("attendance").update({
                             "check_out": now, 
+                            "collected_by": current_selection,
                             "hours": ncs_round(log['check_in'], now),
-                            "notes": f"By {current_selection}. {note}"
+                            "notes": f"Collected by {current_selection}. {note}"
                         }).eq("id", child_id).execute()
                         if c_key in st.session_state: del st.session_state[c_key]
                         st.rerun()
 
-# --- 7. ADMIN ---
+# --- 7. ADMIN SETTINGS (ENROLLMENT) ---
 elif page == "Admin Settings":
+    st.title("⚙️ Administration Portal")
     if not st.session_state.get('admin_auth'):
-        u, p = st.text_input("User"), st.text_input("Pass", type="password")
-        if st.button("Login") and u == "dave" and p == "bonnie123":
-            st.session_state['admin_auth'] = True
-            st.rerun()
-    else:
-        st.subheader("Enroll Child")
-        # Enrollment form code here...
-        if st.button("Logout"):
-            st.session_state['admin_auth'] = False
-            st.rerun()# --- 8. REPORTS ---
-st.divider()
-st.header("📊 Daily Attendance Report")
-r_date = st.date_input("Report Date", datetime.now())
-if st.button("Generate Report"):
-    att_data = supabase.table("attendance").select("*").eq("date", str(r_date)).execute()
-    kids_at_site = supabase.table("children").select("name").eq("location", sel_site).execute()
-    names_at_site = [k['name'] for k in kids_at_site.data]
-    
-    filtered = [r for r in att_data.data if r['name'] in names_at_site]
-    if filtered:
-        df = pd.DataFrame(filtered)[["name", "check_in", "check_out", "hours"]]
-        df.columns = ["Child", "In", "Out", "Hours"]
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.info("No records found.")
-# --- 9. QUICK-TAP BOARD ---
-elif page == "Quick-Tap Board":
-    st.title("🔘 Quick-Tap Attendance")
-    st.info(f"Showing children for: **{sel_site}**")
-
-    # 1. Fetch all children for this site
-    kids_res = supabase.table("children").select("name").eq("location", sel_site).execute()
-    all_kids = sorted([k['name'] for k in kids_res.data])
-
-    # 2. Get currently checked-in children to know who is 'IN'
-    active_res = supabase.table("attendance").select("name").is_("check_out", "null").execute()
-    checked_in_names = [a['name'] for a in active_res.data]
-
-    # 3. Create the Grid (4 children per row)
-    cols = st.columns(4)
-    for i, name in enumerate(all_kids):
-        first_name = name.split()[0] # Get just the first name for the button
-        is_in = name in checked_in_names
-        
-        # Style: Green for present, Grey for absent
-        btn_label = f"🟢 {first_name}" if is_in else f"⚪ {first_name}"
-        
-        if cols[i % 4].button(btn_label, key=f"tap_{name}", use_container_width=True):
-            if not is_in:
-                # SIGN IN
-                supabase.table("attendance").insert({
-                    "name": name, 
-                    "date": str(datetime.now().date()), 
-                    "session": "Afterschool", 
-                    "check_in": datetime.now().strftime("%H:%M:%S")
-                }).execute()
-                st.toast(f"{first_name} Checked In!")
+        u, p = st.text_input("Username"), st.text_input("Password", type="password")
+        if st.button("Login"):
+            if u == "dave" and p == "bonnie123":
+                st.session_state['admin_auth'] = True
                 st.rerun()
             else:
-                # SIGN OUT
-                # Find the record to update
-                record = supabase.table("attendance").select("id, check_in").eq("name", name).is_("check_out", "null").execute()
-                if record.data:
-                    rec = record.data[0]
-                    now_time = datetime.now().strftime("%H:%M:%S")
-                    rounded_h = ncs_round(rec['check_in'], now_time)
-                    supabase.table("attendance").update({
-                        "check_out": now_time, 
-                        "hours": rounded_h
-                    }).eq("id", rec['id']).execute()
-                    st.toast(f"{first_name} Checked Out!")
-                    st.rerun()
+                st.error("Invalid Credentials.")
+    else:
+        st.subheader("➕ Enroll New Child")
+        with st.form("enrollment_form", clear_on_submit=True):
+            new_name = st.text_input("Child's Full Name")
+            new_loc = st.selectbox("Assigned Base Site Location", sites, index=sites.index(sel_site))
+            allergies = st.text_area("Allergies / Medical Notes", value="None")
+            
+            submit_enrollment = st.form_submit_button("Save Child to Database")
+            if submit_enrollment:
+                if new_name.strip() != "":
+                    try:
+                        supabase.table("children").insert({
+                            "name": new_name.strip(),
+                            "location": new_loc,
+                            "allergies": allergies
+                        }).execute()
+                        st.success(f"🎉 {new_name} successfully added to database at {new_loc}!")
+                    except Exception as e:
+                        st.error(f"Failed to save child: {e}")
+                else:
+                    st.error("Name field cannot be blank.")
+
+        if st.button("Logout from Admin Panel"):
+            st.session_state['admin_auth'] = False
+            st.rerun()
+
+# --- 8. GLOBAL REPORTS ---
+st.divider()
+st.header("📊 Daily Attendance Report")
+r_date = st.date_input("Select Report Date", datetime.now().date())
+if st.button("Generate Live Report Data"):
+    try:
+        att_data = supabase.table("attendance").select("*").eq("date", str(r_date)).execute()
+        kids_at_site = supabase.table("children").select("name").eq("location", sel_site).execute()
+        names_at_site = [k['name'] for k in kids_at_site.data]
+        
+        filtered = [r for r in att_data.data if r['name'] in names_at_site]
+        if filtered:
+            df = pd.DataFrame(filtered)
+            # Safe fallbacks if column data fields are missing 
+            if 'collected_by' not in df.columns:
+                df['collected_by'] = "N/A", "Total Hours
+Use code with caution.df = df[["name", "check_in", "check_out", "collected_by", "hours"]]df.columns = ["Child Name", "Sign In Time", "Sign Out Time", "Creport data: {e}")
