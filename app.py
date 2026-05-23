@@ -317,7 +317,7 @@ elif page == "NCS Compliance":
                     use_container_width=True
                 )
 
-                # --- CONFIGURATION B: MONTHLY ATTENDANCE SUMMARY REPORT ---
+   # --- CONFIGURATION B: MONTHLY ATTENDANCE SUMMARY REPORT ---
         elif report_type == "Monthly Attendance Summary":
             col_m, col_y = st.columns(2)
             with col_m:
@@ -325,18 +325,13 @@ elif page == "NCS Compliance":
                 selected_month_name = st.selectbox("Select Month", months, index=datetime.now().month - 1)
                 month_idx = months.index(selected_month_name) + 1
             with col_y:
-                # FIXED: Restored the actual years array list parameter values inside the selectbox
                 selected_year = st.selectbox("Select Year", ["2025", "2026", "2027", "2028"], index=1)
 
             if st.button("Generate Monthly Attendance Report", type="primary", use_container_width=True):
                 try:
-                    # FIXED: Create standard calendar start and end boundaries to support Native Postgres Date Columns
                     start_date = f"{selected_year}-{str(month_idx).zfill(2)}-01"
-                    
-                    # Calculate end of month dynamically using Pandas
                     end_date = str((pd.to_datetime(start_date) + pd.offsets.MonthEnd(0)).date())
                     
-                    # Safely fetch entries between the first and last day of the targeted month
                     att_res = supabase.table("attendance").select("*")\
                         .gte("date", start_date)\
                         .lte("date", end_date)\
@@ -364,7 +359,6 @@ elif page == "NCS Compliance":
                                 if log.get('collected_by'):
                                     collector_breakdown.append(log['collected_by'])
                         
-                        # Find most common person picking up the child this month
                         frequent_collector = max(set(collector_breakdown), key=collector_breakdown.count) if collector_breakdown else "N/A"
                         
                         monthly_report.append({
@@ -385,7 +379,6 @@ elif page == "NCS Compliance":
                 except Exception as e:
                     st.error(f"Could not calculate monthly totals: {e}")
 
-            # Display Monthly Results and Export Button
             if "last_monthly_report" in st.session_state:
                 df_m = st.session_state["last_monthly_report"]
                 meta_date = st.session_state["last_monthly_meta"]
@@ -393,7 +386,6 @@ elif page == "NCS Compliance":
                 st.write(f"### 📅 Business Summary Grid: {meta_date.replace('_', ' ')}")
                 st.dataframe(df_m, use_container_width=True)
                 
-                # Monthly Export Utility
                 clean_filename = f"Monthly_Attendance_{sel_site}_{meta_date}.xlsx"
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
@@ -406,7 +398,8 @@ elif page == "NCS Compliance":
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
-# --- 7. ADMIN ---
+
+# --- 7. ADMIN SETTINGS (ENROLLMENT) ---
 elif page == "Admin Settings":
     st.title("⚙️ Administration Portal")
     if not st.session_state.get('admin_auth'):
