@@ -216,5 +216,9 @@ if st.button("Generate Live Report Data"):
             df = pd.DataFrame(filtered)
             # Safe fallbacks if column data fields are missing 
             if 'collected_by' not in df.columns:
-                df['collected_by'] = "N/A", "Total Hours
-Use code with caution.df = df[["name", "check_in", "check_out", "collected_by", "hours"]]df.columns = ["Child Name", "Sign In Time", "Sign Out Time", "Creport data: {e}")
+                df['collected_by'] = "N/A"
+            
+            # Select and rename columns cleanly
+            df = df[["name", "check_in", "check_out", "collected_by", "hours"]]
+            df.columns = ["Child Name", "Sign In Time", "Sign Out Time", "Collected By", "Total Hours Calculated"]
+            st.dataframe(df, use_container_width=True)
