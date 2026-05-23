@@ -180,12 +180,10 @@ elif page == "NCS Compliance":
     if not site_kids:
         st.info(f"No children registered at {sel_site} yet.")
     else:
-        # Create a dictionary in session state to manage mock registered CHICK hours locally 
-        # (In production, map this to an 'ncs_registered_hours' column in your 'children' table)
         if "reg_hours" not in st.session_state:
-            st.session_state.reg_hours = {name: 20 for name in site_kids} # default standard 20 hours
+            st.session_state.reg_hours = {name: 20 for name in site_kids}
             
-        col1, col2 = st.columns([2, 1])
+        col1, col2 = st.columns()
         with col1:
             target_child = st.selectbox("Select Child to Adjust Hive CHICK Registration", site_kids)
         with col2:
@@ -200,19 +198,16 @@ elif page == "NCS Compliance":
         st.subheader("📅 Step 2: Compile Weekly Hive Submission Audit")
         selected_week_start = st.date_input("Select Week Start Date (Monday)", value=datetime.now().date())
         
-        # Calculate full week dates (Mon-Fri)
         week_days = [str(selected_week_start + pd.Timedelta(days=i)) for i in range(5)]
         
         if st.button("Calculate Compliance & Generate Hive Returns", type="primary", use_container_width=True):
             try:
-                # Fetch attendance logs for all days of the selected week
                 att_res = supabase.table("attendance").select("*").in_("date", week_days).execute()
                 att_data = att_res.data
                 
                 compliance_report = []
                 
                 for child_name in site_kids:
-                    # Filter matching child rows for this specific week
                     child_logs = [log for log in att_data if log['name'] == child_name]
                     
                     total_actual_hours = 0.0
@@ -226,20 +221,12 @@ elif page == "NCS Compliance":
                             start = datetime.strptime(log['check_in'], fmt)
                             end = datetime.strptime(log['check_out'], fmt)
                             
-                            # Exact raw runtime math hours
                             duration_hours = (end - start).total_seconds() / 3600
                             total_actual_hours += duration_hours
-                            
-                            # Official Pobal Daily Rounding Rule: Partial hours always round up to next whole integer
                             total_ncs_rounded_hours += math.ceil(duration_hours)
                     
-                    # Fetch target registered limit metrics
                     registered_hours = st.session_state.reg_hours.get(child_name, 20)
-                    
-                    # Core Funding / NCS Rule check: Cannot claim more than registered max award limit
                     hours_to_claim = min(total_ncs_rounded_hours, registered_hours)
-                    
-                    # Under-Attendance Watchdog Risk Calculations
                     under_attending = total_ncs_rounded_hours < registered_hours
                     variance = registered_hours - total_ncs_rounded_hours if under_attending else 0
                     
@@ -256,9 +243,10 @@ elif page == "NCS Compliance":
                 
                 if compliance_report:
                     df_comp = pd.DataFrame(compliance_report)
+                    st.session_state["last_ncs_report"] = df_comp  # Cache calculation parameters safely
+                    st.session_state["last_ncs_week"] = str(selected_week_start)
                     st.success("📊 Compiled Pobal Compliance Matrices Successfully!")
                     
-                    # Highlight issues clearly
                     st.dataframe(
                         df_comp.style.map(
                             lambda x: "background-color: #ffcccc; color: black;" if x == "⚠️ Under-Attending" else "",
@@ -267,7 +255,6 @@ elif page == "NCS Compliance":
                         use_container_width=True
                     )
                     
-                    # Under-attendance warnings notice box breakdown summaries
                     flagged_kids = df_comp[df_comp["Under-Attendance Flag"] == "⚠️ Under-Attending"]
                     if not flagged_kids.empty:
                         with st.warning("🚨 **Pobal Audit Warning Risk Alerts:**"):
@@ -283,6 +270,38 @@ elif page == "NCS Compliance":
                     
             except Exception as e:
                 st.error(f"Could not calculate compliance totals: {e}")
+
+        # --- NEW: EXPORT SUITE ACTION UTILITY ---
+        if "last_ncs_report" in st.session_state:
+            st.write("### 📥 Step 3: Secure Audit Export Panel")
+            
+            cached_df = st.session_state["last_ncs_report"]
+            target_week = st.session_state["last_ncs_week"]
+            
+            # Construct a clear filename following official auditing naming patterns
+            clean_filename = f"NCS_Hive_Return_{sel_site}_Week_{target_week}.xlsx"
+            
+            # Compile a multi-sheet spreadsheet directly within system RAM
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+                # Sheet 1: Main Overview Submission Return Sheet
+                cached_df.to_excel(writer, sheet_name="Hive Claims Return", index=False)
+                
+                # Sheet 2: Isolated Compliance Exceptions Risk List Sheet
+                exceptions_df = cached_df[cached_df["Under-Attendance Flag"] == "⚠️ Under-Attending"]
+                if exceptions_df.empty:
+                    exceptions_df = pd.DataFrame([{"Status": "All records completely compliant for this tracking period."}])
+                exceptions_df.to_excel(writer, sheet_name="Pobal Compliance Warnings", index=False)
+
+            # Present standard download action widget to user
+            st.download_button(
+                label=f"💾 Download {clean_filename}",
+                data=buffer.getvalue(),
+                file_name=clean_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True
+            )
 
 # --- 7. ADMIN SETTINGS (ENROLLMENT) ---
 elif page == "Admin Settings":
