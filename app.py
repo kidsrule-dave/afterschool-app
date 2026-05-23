@@ -161,7 +161,7 @@ elif page == "Attendance":
             else:
                 st.info("No children registered at this site yet. Go to Admin Settings to register them.")
 
-        # --- OPTION B: NEW BUS ATTENDANCE DRIVER MODE ---
+        # --- OPTION B: BUS ATTENDANCE DRIVER MODE ---
         elif mode_toggle == "School Bus Collection Roster":
             st.info(f"📅 Active Route Schedule: **{current_day_name}** | Base Hub Target: **{sel_site}**")
             
