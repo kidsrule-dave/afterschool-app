@@ -317,7 +317,7 @@ elif page == "NCS Compliance":
                     use_container_width=True
                 )
 
-             # --- CONFIGURATION B: MONTHLY ATTENDANCE SUMMARY REPORT ---
+                # --- CONFIGURATION B: MONTHLY ATTENDANCE SUMMARY REPORT ---
         elif report_type == "Monthly Attendance Summary":
             col_m, col_y = st.columns(2)
             with col_m:
@@ -325,7 +325,8 @@ elif page == "NCS Compliance":
                 selected_month_name = st.selectbox("Select Month", months, index=datetime.now().month - 1)
                 month_idx = months.index(selected_month_name) + 1
             with col_y:
-                selected_year = st.selectbox("Select Year", [2025, 2026, 2027], index=1)
+                # FIXED: Restored the actual years array list parameter values inside the selectbox
+                selected_year = st.selectbox("Select Year", ["2025", "2026", "2027", "2028"], index=1)
 
             if st.button("Generate Monthly Attendance Report", type="primary", use_container_width=True):
                 try:
