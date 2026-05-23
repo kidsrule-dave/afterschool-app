@@ -129,73 +129,84 @@ elif page == "Attendance":
     tab1, tab2 = st.tabs(["🚌 Arrivals (Quick-Sign In)", "👤 Departures (Sign Out)"])
     
     with tab1:
-        st.subheader("🚌 Select Sign-In Track")
-        mode_toggle = st.radio("Arrival Mode", ["On-Site Walk-In", "School Bus Collection Roster"], horizontal=True)
+        st.subheader("Quick-Tap Children to Sign In")
         today_str = str(datetime.now().date())
-        current_day_name = datetime.now().strftime("%A")
-
-        # --- OPTION A: STANDARD ON-SITE TOUCHSCREEN CHECK-IN ---
-        if mode_toggle == "On-Site Walk-In":
-            try:
-                kids = supabase.table("children").select("name").eq("location", sel_site).execute()
-                all_names = sorted([k['name'] for k in kids.data])
-                active_res = supabase.table("attendance").select("name").eq("date", today_str).eq("location", sel_site).is_("check_out", "null").execute()
-                already_in = [a['name'] for a in active_res.data]
-            except Exception as e:
-                st.error(f"Error loading roster: {e}")
-                all_names, already_in = [], []
-
-            if all_names:
-                arr_cols = st.columns(3)
-                for idx, child_name in enumerate(all_names):
-                    with arr_cols[idx % 3]:
-                        if child_name in already_in:
-                            st.button(f"✅ {child_name} (IN)", key=f"std_in_{idx}", disabled=True, use_container_width=True)
-                        else:
-                            if st.button(f"➕ {child_name}", key=f"std_btn_{idx}", type="secondary", use_container_width=True):
-                                supabase.table("attendance").insert({
-                                    "name": child_name, "location": sel_site, "date": today_str,
-                                    "check_in": datetime.now().strftime("%H:%M:%S"), "check_in_method": "Walk-In"
-                                }).execute()
-                                st.rerun()
-            else:
-                st.info("No children registered at this site yet. Go to Admin Settings to register them.")
-
-        # --- OPTION B: BUS ATTENDANCE DRIVER MODE ---
-        elif mode_toggle == "School Bus Collection Roster":
-            st.info(f"📅 Active Route Schedule: **{current_day_name}** | Base Hub Target: **{sel_site}**")
+        
+        try:
+            # 1. Fetch all children registered to this site
+            kids = supabase.table("children").select("name").eq("location", sel_site).execute()
+            all_names = sorted([k['name'] for k in kids.data])
             
-            try:
-                kids_res = supabase.table("children").select("name", "school", "collection_days").eq("location", sel_site).execute()
-                todays_bus_kids = [k for k in kids_res.data if current_day_name in k.get('collection_days', [])]
-                schools_on_route = sorted(list(set([k['school'] for k in todays_bus_kids])))
-                
-                active_res = supabase.table("attendance").select("name").eq("date", today_str).eq("location", sel_site).is_("check_out", "null").execute()
-                already_in = [a['name'] for a in active_res.data]
-            except Exception as e:
-                st.error(f"Transport database lookup failed: {e}")
-                todays_bus_kids, schools_on_route, already_in = [], [], []
+            # 2. Get children who are ALREADY signed in today at this site
+            active_res = supabase.table("attendance").select("name").eq("date", today_str).eq("location", sel_site).is_("check_out", "null").execute()
+            already_in = [a['name'] for a in active_res.data]
+        except Exception as e:
+            st.error(f"Could not load attendance roster: {e}")
+            all_names = []
+            already_in = []
 
-            if not schools_on_route:
-                st.warning(f"No children are booked onto a bus collection route for {sel_site} on {current_day_name}s.")
-            else:
-                selected_pickup_school = st.selectbox("Select School Collection Point", schools_on_route)
-                school_roster = [k for k in todays_bus_kids if k['school'] == selected_pickup_school]
-                
-                st.write(f"### 📋 Roster Checklist for {selected_pickup_school}")
-                
-                school_names = [k['name'] for k in school_roster]
-                collected_count = sum(1 for name in school_names if name in already_in)
-                total_count = len(school_names)
-                
-                st.progress(collected_count / total_count if total_count > 0 else 0.0)
-                st.caption(f"🚌 Collected status: **{collected_count} of {total_count} children** safely boarded.")
+        if all_names:
+            # Layout children in a clean 3-column touchscreen grid
+            arr_cols = st.columns(3)
+            
+            for idx, child_name in enumerate(all_names):
+                with arr_cols[idx % 3]:
+                    if child_name in already_in:
+                        st.button(f"✅ {child_name} (IN)", key=f"std_in_{idx}", disabled=True, use_container_width=True)
+                    else:
+                        if st.button(f"➕ {child_name}", key=f"std_btn_{idx}", type="secondary", use_container_width=True):
+                            try:
+                                supabase.table("attendance").insert({
+                                    "name": child_name, 
+                                    "location": sel_site, 
+                                    "date": today_str,
+                                    "check_in": datetime.now().strftime("%H:%M:%S")
+                                }).execute()
+                                st.success(f"Signed in {child_name}!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to check in: {e}")
+        else:
+            st.info("No children registered at this site yet. Go to Admin Settings to register them.")
 
-                bus_cols = st.columns(2)
-                for i, child_data in enumerate(school_roster):
-                    c_name = child_data['name']
-                    with bus_cols[i % 2]:
-                        if c_name in already_in:
+    with tab2:
+        st.subheader("Sign Out Children")
+        try:
+            active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
+            children_res = supabase.table("children").select("name", "location").eq("location", sel_site).execute()
+            site_children = {c['name']: c for c in children_res.data}
+            site_logs = [a for a in active_res.data if a['name'] in site_children]
+        except Exception as e:
+            site_logs = []
+
+        if not site_logs:
+            st.info("No active check-ins found for this location.")
+
+        for log in site_logs:
+            child_id = log['id']
+            c_key = f"coll_{child_id}"
+            
+            with st.expander(f"Sign-Out Profile: {log['name']} (In: {log['check_in']})"):
+                current_selection = st.session_state.get(c_key)
+                
+                st.write("**Who is collecting the child?**")
+                collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
+                cols = st.columns(4)
+                for i, p in enumerate(collectors):
+                    b_type = "primary" if current_selection == p else "secondary"
+                    if cols[i % 4].button(p, key=f"btn_{p}_{child_id}", type=b_type, use_container_width=True):
+                        st.session_state[c_key] = p
+                        st.rerun()
+                
+                if current_selection:
+                    st.success(f"Selected Collector: {current_selection}")
+                
+                note = st.text_input("Additional Notes (e.g. Medication, Mood)", key=f"note_{child_id}")
+                st.write("Authorized Signature:")
+                st_canvas(height=100, width=300, key=f"sig_{child_id}", drawing_mode="freedraw")
+                
+                if st.button("Complete Sign-Out Process", key=f"out_{child_id}", type="primary", use_container_width=True):
+                    if not current_selection:
 # --- 7. ADMIN SETTINGS (ENROLLMENT) ---
 elif page == "Admin Settings":
     st.title("⚙️ Administration Portal")
