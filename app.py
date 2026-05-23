@@ -7,13 +7,9 @@ from supabase import create_client, Client
 from streamlit_drawable_canvas import st_canvas
 
 # --- 1. SECURE CONNECTION ---
-# Replace these with your real project API credentials from your Supabase settings!
-SUPABASE_URL = "https://supabase.co"
-SUPABASE_KEY = "sb_publishable_HFSxcJjKT8c0M1_UoFLznA_J6HzGbdm"
-
-# Programmatically strip trailing slashes to prevent connection errors
-clean_url = SUPABASE_URL.strip().rstrip("/")
-supabase: Client = create_client(clean_url, SUPABASE_KEY)
+SUPABASE_URL = "https://wwofdtdjpprvtzjmqgbk.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3b2ZkdGRqcHBydnR6am1xZ2JrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5MTQzMTcsImV4cCI6MjA5MTQ5MDMxN30.jirzLPRXKfr1Z3slm-0CchvTU7lXgLtTWuCk1RDhmfQ"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- 2. UTILS ---
 def ncs_round(check_in, check_out):
@@ -35,7 +31,7 @@ if page == "Dashboard":
     
     try:
         # Check current headcount specifically filtered for this site location
-        kids_res = supabase.table("attendance").select("id", count="exact").eq("date", today).eq("location", sel_site).is_("check_out", "null").execute()
+        kids_res = supabase.table("attendance").select("id", count="exact").eq("date", today).is_("check_out", "null").execute()
         kids_in = kids_res.count if kids_res.count else 0
     except:
         kids_in = 0
@@ -62,6 +58,7 @@ elif page == "Quick-Tap Board":
     if not site_logs:
         st.info(f"No children currently checked in at {sel_site}.")
     else:
+        # Layout present children in a clean 3-column grid of name buttons
         st.write("### 👤 Children Present")
         grid_cols = st.columns(3)
         
@@ -69,8 +66,11 @@ elif page == "Quick-Tap Board":
             child_id = log['id']
             child_name = log['name']
             
+            # Keep track of which child button is currently tapped/active
             active_child_key = "active_tap_child_id"
             is_active = st.session_state.get(active_child_key) == child_id
+            
+            # Visual anchor: highlight the button if it is currently selected
             b_style = "primary" if is_active else "secondary"
             
             with grid_cols[idx % 3]:
@@ -80,22 +80,25 @@ elif page == "Quick-Tap Board":
 
         st.divider()
 
-        # Show collector selection panel for the selected child
+        # --- STEP 2: SHOW COLLECTOR PANEL FOR THE CLICKED CHILD ---
         active_id = st.session_state.get("active_tap_child_id")
         
         if active_id:
+            # Find the full log data matching our clicked child
             selected_log = next((l for l in site_logs if l['id'] == active_id), None)
             
             if selected_log:
                 c_key = f"coll_{active_id}"
                 current_collector = st.session_state.get(c_key)
                 
+                # Render a clear workspace container for the chosen child
                 with st.container(border=True):
                     st.subheader(f"🔑 Sign-Out: {selected_log['name']}")
                     st.write(f"🎒 *In since {selected_log['check_in']}*")
                     st.write("---")
                     st.write("**Who is collecting them?**")
                     
+                    # Collector tap options layout
                     collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
                     coll_cols = st.columns(4)
                     
@@ -105,11 +108,13 @@ elif page == "Quick-Tap Board":
                             st.session_state[c_key] = p
                             st.rerun()
                     
+                    # Final Submission Confirmation Bar
                     if current_collector:
                         st.write("")
                         if st.button(f"✅ Confirm: {current_collector} is picking up {selected_log['name']}", key=f"fin_qt_{active_id}", type="primary", use_container_width=True):
                             now = datetime.now().strftime("%H:%M:%S")
                             
+                            # Update records inside Supabase storage array
                             supabase.table("attendance").update({
                                 "check_out": now, 
                                 "collected_by": current_collector,
@@ -117,92 +122,126 @@ elif page == "Quick-Tap Board":
                                 "notes": f"Quick-tap pickup by {current_collector}"
                             }).eq("id", active_id).execute()
                             
+                            # Reset session keys so the panel closes out completely
                             if c_key in st.session_state: del st.session_state[c_key]
                             if "active_tap_child_id" in st.session_state: del st.session_state["active_tap_child_id"]
                             
                             st.success(f"Successfully signed out {selected_log['name']}!")
                             st.rerun()
-
 # --- 6. ATTENDANCE & SIGN-OUT ---
 elif page == "Attendance":
     st.title("📍 Daily Log")
     tab1, tab2 = st.tabs(["🚌 Arrivals (Quick-Sign In)", "👤 Departures (Sign Out)"])
     
     with tab1:
-        st.subheader("🚌 Select Sign-In Track")
-        mode_toggle = st.radio("Arrival Mode", ["On-Site Walk-In", "School Bus Collection Roster"], horizontal=True)
+        st.subheader("Quick-Tap Children to Sign In")
         today_str = str(datetime.now().date())
-        current_day_name = datetime.now().strftime("%A")
-
-        # --- OPTION A: STANDARD ON-SITE TOUCHSCREEN CHECK-IN ---
-        if mode_toggle == "On-Site Walk-In":
-            try:
-                kids = supabase.table("children").select("name").eq("location", sel_site).execute()
-                all_names = sorted([k['name'] for k in kids.data])
-                active_res = supabase.table("attendance").select("name").eq("date", today_str).eq("location", sel_site).is_("check_out", "null").execute()
-                already_in = [a['name'] for a in active_res.data]
-            except Exception as e:
-                st.error(f"Error loading roster: {e}")
-                all_names, already_in = [], []
-
-            if all_names:
-                arr_cols = st.columns(3)
-                for idx, child_name in enumerate(all_names):
-                    with arr_cols[idx % 3]:
-                        if child_name in already_in:
-                            st.button(f"✅ {child_name} (IN)", key=f"std_in_{idx}", disabled=True, use_container_width=True)
-                        else:
-                            if st.button(f"➕ {child_name}", key=f"std_btn_{idx}", type="secondary", use_container_width=True):
-                                supabase.table("attendance").insert({
-                                    "name": child_name, "location": sel_site, "date": today_str,
-                                    "check_in": datetime.now().strftime("%H:%M:%S"), "check_in_method": "Walk-In"
-                                }).execute()
-                                st.rerun()
-            else:
-                st.info("No children registered at this site yet. Go to Admin Settings to register them.")
-
-        # --- OPTION B: BUS ATTENDANCE DRIVER MODE ---
-        elif mode_toggle == "School Bus Collection Roster":
-            st.info(f"📅 Active Route Schedule: **{current_day_name}** | Base Hub Target: **{sel_site}**")
+        
+        try:
+            # 1. Fetch all children registered to this site
+            kids = supabase.table("children").select("name").eq("location", sel_site).execute()
+            all_names = sorted([k['name'] for k in kids.data])
             
-            try:
-                kids_res = supabase.table("children").select("name", "school", "collection_days").eq("location", sel_site).execute()
-                todays_bus_kids = [k for k in kids_res.data if current_day_name in k.get('collection_days', [])]
-                schools_on_route = sorted(list(set([k['school'] for k in todays_bus_kids])))
-                
-                active_res = supabase.table("attendance").select("name").eq("date", today_str).eq("location", sel_site).is_("check_out", "null").execute()
-                already_in = [a['name'] for a in active_res.data]
-            except Exception as e:
-                st.error(f"Transport database lookup failed: {e}")
-                todays_bus_kids, schools_on_route, already_in = [], [], []
+            # 2. Get children who are ALREADY signed in today at this site
+            active_res = supabase.table("attendance").select("name").eq("date", today_str).eq("location", sel_site).is_("check_out", "null").execute()
+            already_in = [a['name'] for a in active_res.data]
+        except Exception as e:
+            st.error(f"Could not load attendance roster: {e}")
+            all_names = []
+            already_in = []
 
-            if not schools_on_route:
-                st.warning(f"No children are booked onto a bus collection route for {sel_site} on {current_day_name}s.")
-            else:
-                selected_pickup_school = st.selectbox("Select School Collection Point", schools_on_route)
-                school_roster = [k for k in todays_bus_kids if k['school'] == selected_pickup_school]
-                
-                st.write(f"### 📋 Roster Checklist for {selected_pickup_school}")
-                
-                school_names = [k['name'] for k in school_roster]
-                collected_count = sum(1 for name in school_names if name in already_in)
-                total_count = len(school_names)
-                
-                st.progress(collected_count / total_count if total_count > 0 else 0.0)
-                st.caption(f"🚌 Collected status: **{collected_count} of {total_count} children** safely boarded.")
+        if all_names:
+            # Layout children in a clean 3-column touchscreen grid
+            arr_cols = st.columns(3)
+            
+            for idx, child_name in enumerate(all_names):
+                with arr_cols[idx % 3]:
+                    if child_name in already_in:
+                        # Disabled visual anchor showing the child is safely in the building
+                        st.button(
+                            f"✅ {child_name} (IN)", 
+                            key=f"signin_done_{idx}", 
+                            disabled=True, 
+                            use_container_width=True
+                        )
+                    else:
+                        # Clickable button to immediately sign the child in
+                        if st.button(
+                            f"➕ {child_name}", 
+                            key=f"signin_btn_{idx}", 
+                            type="secondary", 
+                            use_container_width=True
+                        ) :
+                            try:
+                                supabase.table("attendance").insert({
+                                    "name": child_name, 
+                                    "location": sel_site,
+                                    "date": today_str, 
+                                    "check_in": datetime.now().strftime("%H:%M:%S")
+                                }).execute()
+                                st.success(f"Signed in {child_name}!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to check in: {e}")
+        else:
+            st.info("No children registered at this site yet. Go to Admin Settings to register them.")
 
-                bus_cols = st.columns(2)
-                for i, child_data in enumerate(school_roster):
-                    c_name = child_data['name']
-                    with bus_cols[i % 2]:
-                        if c_name in already_in:
-# --- 6b. NCS COMPLIANCE & REPORTS MANAGEMENT ---
+    with tab2:
+        st.subheader("Sign Out Children")
+        try:
+            active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
+            children_res = supabase.table("children").select("name", "location").eq("location", sel_site).execute()
+            site_children = {c['name']: c for c in children_res.data}
+            site_logs = [a for a in active_res.data if a['name'] in site_children]
+        except Exception as e:
+            site_logs = []
+
+        if not site_logs:
+            st.info("No active check-ins found for this location.")
+
+        for log in site_logs:
+            child_id = log['id']
+            c_key = f"coll_{child_id}"
+            
+            with st.expander(f"Sign-Out Profile: {log['name']} (In: {log['check_in']})"):
+                current_selection = st.session_state.get(c_key)
+                
+                st.write("**Who is collecting the child?**")
+                collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
+                cols = st.columns(4)
+                for i, p in enumerate(collectors):
+                    b_type = "primary" if current_selection == p else "secondary"
+                    if cols[i % 4].button(p, key=f"btn_{p}_{child_id}", type=b_type, use_container_width=True):
+                        st.session_state[c_key] = p
+                        st.rerun()
+                
+                if current_selection:
+                    st.success(f"Selected Collector: {current_selection}")
+                
+                note = st.text_input("Additional Notes (e.g. Medication, Mood)", key=f"note_{child_id}")
+                st.write("Authorized Signature:")
+                st_canvas(height=100, width=300, key=f"sig_{child_id}", drawing_mode="freedraw")
+                
+                if st.button("Complete Sign-Out Process", key=f"out_{child_id}", type="primary", use_container_width=True):
+                    if not current_selection:
+                        st.error("⚠️ System requires you to select a collector before submitting!")
+                    else:
+                        now = datetime.now().strftime("%H:%M:%S")
+                        supabase.table("attendance").update({
+                            "check_out": now, 
+                            "collected_by": current_selection,
+                            "hours": ncs_round(log['check_in'], now),
+                            "notes": f"Collected by {current_selection}. {note}"
+                        }).eq("id", child_id).execute()
+                        if c_key in st.session_state: del st.session_state[c_key]
+                        st.rerun()
+# --- 6b. NCS COMPLIANCE MANAGEMENT ---
 elif page == "NCS Compliance":
-    st.title("🇪🇺 NCS Compliance & Attendance Reports")
+    st.title("🇪🇺 National Childcare Scheme (NCS) Compliance Dashboard")
     st.caption("Aligned with Pobal & Early Years Hive Guidelines for Pobal Visit Officer (VO) Inspections.")
     
     # 1. Fetch Registered Funding Contracts
-    st.subheader("📋 Step 1: Manage Weekly Registered Funding Hours")
+    st.subheader("📋 Step 1: View/Set Weekly Registered Funding Hours")
     try:
         kids_res = supabase.table("children").select("name", "location").eq("location", sel_site).execute()
         site_kids = sorted([k['name'] for k in kids_res.data])
@@ -227,186 +266,116 @@ elif page == "NCS Compliance":
 
         st.divider()
 
-        # 2. Select Report Type
-        st.subheader("📊 Step 2: Choose Report Configuration")
-        report_type = st.radio("Select Report Interval", ["Weekly Hive Audit", "Monthly Attendance Summary"], horizontal=True)
+        # 2. Date Selection for Weekly Return Processing
+        st.subheader("📅 Step 2: Compile Weekly Hive Submission Audit")
+        selected_week_start = st.date_input("Select Week Start Date (Monday)", value=datetime.now().date())
+        
+        week_days = [str(selected_week_start + pd.Timedelta(days=i)) for i in range(5)]
+        
+        if st.button("Calculate Compliance & Generate Hive Returns", type="primary", use_container_width=True):
+            try:
+                att_res = supabase.table("attendance").select("*").in_("date", week_days).execute()
+                att_data = att_res.data
+                
+                compliance_report = []
+                
+                for child_name in site_kids:
+                    child_logs = [log for log in att_data if log['name'] == child_name]
+                    
+                    total_actual_hours = 0.0
+                    total_ncs_rounded_hours = 0
+                    days_attended = 0
+                    
+                    for log in child_logs:
+                        if log['check_in'] and log['check_out']:
+                            days_attended += 1
+                            fmt = "%H:%M:%S"
+                            start = datetime.strptime(log['check_in'], fmt)
+                            end = datetime.strptime(log['check_out'], fmt)
+                            
+                            duration_hours = (end - start).total_seconds() / 3600
+                            total_actual_hours += duration_hours
+                            total_ncs_rounded_hours += math.ceil(duration_hours)
+                    
+                    registered_hours = st.session_state.reg_hours.get(child_name, 20)
+                    hours_to_claim = min(total_ncs_rounded_hours, registered_hours)
+                    under_attending = total_ncs_rounded_hours < registered_hours
+                    variance = registered_hours - total_ncs_rounded_hours if under_attending else 0
+                    
+                    compliance_report.append({
+                        "Child": child_name,
+                        "Days Present": days_attended,
+                        "Actual Active Hours": round(total_actual_hours, 2),
+                        "Daily Rounded Total": total_ncs_rounded_hours,
+                        "Hive CHICK Cap": registered_hours,
+                        "Claimable Hive Hours": hours_to_claim,
+                        "Under-Attendance Flag": "⚠️ Under-Attending" if under_attending else "✅ Compliant",
+                        "Variance (Hours Lost)": variance
+                    })
+                
+                if compliance_report:
+                    df_comp = pd.DataFrame(compliance_report)
+                    st.session_state["last_ncs_report"] = df_comp  # Cache calculation parameters safely
+                    st.session_state["last_ncs_week"] = str(selected_week_start)
+                    st.success("📊 Compiled Pobal Compliance Matrices Successfully!")
+                    
+                    st.dataframe(
+                        df_comp.style.map(
+                            lambda x: "background-color: #ffcccc; color: black;" if x == "⚠️ Under-Attending" else "",
+                            subset=["Under-Attendance Flag"]
+                        ),
+                        use_container_width=True
+                    )
+                    
+                    flagged_kids = df_comp[df_comp["Under-Attendance Flag"] == "⚠️ Under-Attending"]
+                    if not flagged_kids.empty:
+                        with st.warning("🚨 **Pobal Audit Warning Risk Alerts:**"):
+                            st.write(
+                                "The children listed below are attending *fewer hours* than their registered Hive contract. "
+                                "If this consistent tracking variance trend patterns continue for **8 consecutive weeks**, "
+                                "parents will receive a warning notice. At **12 weeks**, claims will be automatically reduced based on actual averages."
+                            )
+                            for _, row in flagged_kids.iterrows():
+                                st.write(f"- **{row['Child']}**: Short by **{row['Variance (Hours Lost)']} hours** this week.")
+                else:
+                    st.info("No logs encountered for any child tracking against the targeted range criteria metrics.")
+                    
+            except Exception as e:
+                st.error(f"Could not calculate compliance totals: {e}")
 
-        # --- CONFIGURATION A: WEEKLY HIVE AUDIT REPORT ---
-        if report_type == "Weekly Hive Audit":
-            selected_week_start = st.date_input("Select Week Start Date (Monday)", value=datetime.now().date())
-            week_days = [str(selected_week_start + pd.Timedelta(days=i)) for i in range(5)]
+        # --- NEW: EXPORT SUITE ACTION UTILITY ---
+        if "last_ncs_report" in st.session_state:
+            st.write("### 📥 Step 3: Secure Audit Export Panel")
             
-            if st.button("Calculate Weekly Compliance & Hive Returns", type="primary", use_container_width=True):
-                try:
-                    att_res = supabase.table("attendance").select("*").in_("date", week_days).execute()
-                    att_data = att_res.data
-                    
-                    compliance_report = []
-                    for child_name in site_kids:
-                        child_logs = [log for log in att_data if log['name'] == child_name]
-                        
-                        total_actual_hours = 0.0
-                        total_ncs_rounded_hours = 0
-                        days_attended = 0
-                        
-                        for log in child_logs:
-                            if log['check_in'] and log['check_out']:
-                                days_attended += 1
-                                fmt = "%H:%M:%S"
-                                start = datetime.strptime(log['check_in'], fmt)
-                                end = datetime.strptime(log['check_out'], fmt)
-                                
-                                duration_hours = (end - start).total_seconds() / 3600
-                                total_actual_hours += duration_hours
-                                total_ncs_rounded_hours += math.ceil(duration_hours)
-                        
-                        registered_hours = st.session_state.reg_hours.get(child_name, 20)
-                        hours_to_claim = min(total_ncs_rounded_hours, registered_hours)
-                        under_attending = total_ncs_rounded_hours < registered_hours
-                        variance = registered_hours - total_ncs_rounded_hours if under_attending else 0
-                        
-                        compliance_report.append({
-                            "Child": child_name,
-                            "Days Present": days_attended,
-                            "Actual Active Hours": round(total_actual_hours, 2),
-                            "Daily Rounded Total": total_ncs_rounded_hours,
-                            "Hive CHICK Cap": registered_hours,
-                            "Claimable Hive Hours": hours_to_claim,
-                            "Under-Attendance Flag": "⚠️ Under-Attending" if under_attending else "✅ Compliant",
-                            "Variance (Hours Lost)": variance
-                        })
-                    
-                    if compliance_report:
-                        df_comp = pd.DataFrame(compliance_report)
-                        st.session_state["last_weekly_report"] = df_comp
-                        st.session_state["last_weekly_date"] = str(selected_week_start)
-                    else:
-                        st.info("No logs encountered for any child tracking against this targeted week.")
-                except Exception as e:
-                    st.error(f"Could not calculate weekly totals: {e}")
-
-            # Display Weekly Results and Export Button
-            if "last_weekly_report" in st.session_state:
-                df_w = st.session_state["last_weekly_report"]
-                w_date = st.session_state["last_weekly_date"]
+            cached_df = st.session_state["last_ncs_report"]
+            target_week = st.session_state["last_ncs_week"]
+            
+            # Construct a clear filename following official auditing naming patterns
+            clean_filename = f"NCS_Hive_Return_{sel_site}_Week_{target_week}.xlsx"
+            
+            # Compile a multi-sheet spreadsheet directly within system RAM
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+                # Sheet 1: Main Overview Submission Return Sheet
+                cached_df.to_excel(writer, sheet_name="Hive Claims Return", index=False)
                 
-                st.write(f"### 📅 Live Weekly Audit Grid: Week of {w_date}")
-                st.dataframe(
-                    df_w.style.map(
-                        lambda x: "background-color: #ffcccc; color: black;" if x == "⚠️ Under-Attending" else "",
-                        subset=["Under-Attendance Flag"]
-                    ),
-                    use_container_width=True
-                )
-                
-                # Export Utility
-                clean_filename = f"Weekly_NCS_Return_{sel_site}_Week_{w_date}.xlsx"
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-                    df_w.to_excel(writer, sheet_name="Hive Weekly Return", index=False)
-                    ex_df = df_w[df_w["Under-Attendance Flag"] == "⚠️ Under-Attending"]
-                    if ex_df.empty:
-                        ex_df = pd.DataFrame([{"Status": "All records completely compliant."}])
-                    ex_df.to_excel(writer, sheet_name="Under-Attendance Warnings", index=False)
+                # Sheet 2: Isolated Compliance Exceptions Risk List Sheet
+                exceptions_df = cached_df[cached_df["Under-Attendance Flag"] == "⚠️ Under-Attending"]
+                if exceptions_df.empty:
+                    exceptions_df = pd.DataFrame([{"Status": "All records completely compliant for this tracking period."}])
+                exceptions_df.to_excel(writer, sheet_name="Pobal Compliance Warnings", index=False)
 
-                st.download_button(
-                    label=f"💾 Download {clean_filename}",
-                    data=buffer.getvalue(),
-                    file_name=clean_filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
+            # Present standard download action widget to user
+            st.download_button(
+                label=f"💾 Download {clean_filename}",
+                data=buffer.getvalue(),
+                file_name=clean_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True
+            )
 
-                # --- CONFIGURATION B: MONTHLY ATTENDANCE SUMMARY REPORT ---
-        elif report_type == "Monthly Attendance Summary":
-            col_m, col_y = st.columns(2)
-            with col_m:
-                months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-                selected_month_name = st.selectbox("Select Month", months, index=datetime.now().month - 1)
-                month_idx = months.index(selected_month_name) + 1
-            with col_y:
-                # FIXED: Restored the actual years array list parameter values inside the selectbox
-                selected_year = st.selectbox("Select Year", ["2025", "2026", "2027", "2028"], index=1)
-
-            if st.button("Generate Monthly Attendance Report", type="primary", use_container_width=True):
-                try:
-                    # FIXED: Create standard calendar start and end boundaries to support Native Postgres Date Columns
-                    start_date = f"{selected_year}-{str(month_idx).zfill(2)}-01"
-                    
-                    # Calculate end of month dynamically using Pandas
-                    end_date = str((pd.to_datetime(start_date) + pd.offsets.MonthEnd(0)).date())
-                    
-                    # Safely fetch entries between the first and last day of the targeted month
-                    att_res = supabase.table("attendance").select("*")\
-                        .gte("date", start_date)\
-                        .lte("date", end_date)\
-                        .execute()
-                    
-                    att_data = att_res.data
-                    
-                    monthly_report = []
-                    for child_name in site_kids:
-                        child_logs = [log for log in att_data if log['name'] == child_name]
-                        
-                        total_hours_monthly = 0.0
-                        days_attended_monthly = 0
-                        collector_breakdown = []
-                        
-                        for log in child_logs:
-                            if log['check_in'] and log['check_out']:
-                                days_attended_monthly += 1
-                                fmt = "%H:%M:%S"
-                                start = datetime.strptime(log['check_in'], fmt)
-                                end = datetime.strptime(log['check_out'], fmt)
-                                duration_hours = (end - start).total_seconds() / 3600
-                                total_hours_monthly += duration_hours
-                                
-                                if log.get('collected_by'):
-                                    collector_breakdown.append(log['collected_by'])
-                        
-                        # Find most common person picking up the child this month
-                        frequent_collector = max(set(collector_breakdown), key=collector_breakdown.count) if collector_breakdown else "N/A"
-                        
-                        monthly_report.append({
-                            "Child Name": child_name,
-                            "Days Attended This Month": days_attended_monthly,
-                            "Total Raw Hours Logged": round(total_hours_monthly, 2),
-                            "Average Hours Per Day": round(total_hours_monthly / days_attended_monthly, 2) if days_attended_monthly > 0 else 0,
-                            "Primary Collector": frequent_collector
-                        })
-                    
-                    if monthly_report:
-                        df_m = pd.DataFrame(monthly_report)
-                        st.session_state["last_monthly_report"] = df_m
-                        st.session_state["last_monthly_meta"] = f"{selected_month_name}_{selected_year}"
-                    else:
-                        st.info(f"No records found in the system for {selected_month_name} {selected_year}.")
-                
-                except Exception as e:
-                    st.error(f"Could not calculate monthly totals: {e}")
-
-            # Display Monthly Results and Export Button
-            if "last_monthly_report" in st.session_state:
-                df_m = st.session_state["last_monthly_report"]
-                meta_date = st.session_state["last_monthly_meta"]
-                
-                st.write(f"### 📅 Business Summary Grid: {meta_date.replace('_', ' ')}")
-                st.dataframe(df_m, use_container_width=True)
-                
-                # Monthly Export Utility
-                clean_filename = f"Monthly_Attendance_{sel_site}_{meta_date}.xlsx"
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-                    df_m.to_excel(writer, sheet_name="Monthly Attendance Overview", index=False)
-
-                st.download_button(
-                    label=f"💾 Download {clean_filename}",
-                    data=buffer.getvalue(),
-                    file_name=clean_filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
-# --- 7. ADMIN ---
+# --- 7. ADMIN SETTINGS (ENROLLMENT) ---
 elif page == "Admin Settings":
     st.title("⚙️ Administration Portal")
     if not st.session_state.get('admin_auth'):
