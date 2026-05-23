@@ -356,7 +356,7 @@ elif page == "NCS Compliance":
                     use_container_width=True
                 )
 
-        # --- CONFIGURATION B: MONTHLY ATTENDANCE SUMMARY REPORT ---
+            # --- CONFIGURATION B: MONTHLY ATTENDANCE SUMMARY REPORT ---
         elif report_type == "Monthly Attendance Summary":
             col_m, col_y = st.columns(2)
             with col_m:
@@ -364,7 +364,7 @@ elif page == "NCS Compliance":
                 selected_month_name = st.selectbox("Select Month", months, index=datetime.now().month - 1)
                 month_idx = months.index(selected_month_name) + 1
             with col_y:
-                selected_year = st.selectbox("Select Year", [2025, 2026, 2027], index=1) # Defaults to 2026
+                selected_year = st.selectbox("Select Year", [2025, 2026, 2027], index=1)
 
             if st.button("Generate Monthly Attendance Report", type="primary", use_container_width=True):
                 try:
@@ -412,7 +412,33 @@ elif page == "NCS Compliance":
                         st.session_state["last_monthly_meta"] = f"{selected_month_name}_{selected_year}"
                     else:
                         st.info(f"No records found in the system for {selected_month_name} {selected_year}.")
-# --- 7. ADMIN SETTINGS (ENROLLMENT) ---
+                
+                except Exception as e:
+                    st.error(f"Could not calculate monthly totals: {e}")
+
+            # Display Monthly Results and Export Button
+            if "last_monthly_report" in st.session_state:
+                df_m = st.session_state["last_monthly_report"]
+                meta_date = st.session_state["last_monthly_meta"]
+                
+                st.write(f"### 📅 Business Summary Grid: {meta_date.replace('_', ' ')}")
+                st.dataframe(df_m, use_container_width=True)
+                
+                # Monthly Export Utility
+                clean_filename = f"Monthly_Attendance_{sel_site}_{meta_date}.xlsx"
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+                    df_m.to_excel(writer, sheet_name="Monthly Attendance Overview", index=False)
+
+                st.download_button(
+                    label=f"💾 Download {clean_filename}",
+                    data=buffer.getvalue(),
+                    file_name=clean_filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+
+# --- 7. ADMIN ---
 elif page == "Admin Settings":
     st.title("⚙️ Administration Portal")
     if not st.session_state.get('admin_auth'):
