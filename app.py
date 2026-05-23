@@ -131,33 +131,58 @@ elif page == "Quick-Tap Board":
 # --- 6. ATTENDANCE & SIGN-OUT ---
 elif page == "Attendance":
     st.title("📍 Daily Log")
-    tab1, tab2 = st.tabs(["🚌 Arrivals (Sign In)", "👤 Departures (Sign Out)"])
+    tab1, tab2 = st.tabs(["🚌 Arrivals (Quick-Sign In)", "👤 Departures (Sign Out)"])
     
     with tab1:
-        st.subheader("Sign In Children")
+        st.subheader("Quick-Tap Children to Sign In")
+        today_str = str(datetime.now().date())
+        
         try:
+            # 1. Fetch all children registered to this site
             kids = supabase.table("children").select("name").eq("location", sel_site).execute()
-            names = sorted([k['name'] for k in kids.data])
+            all_names = sorted([k['name'] for k in kids.data])
+            
+            # 2. Get children who are ALREADY signed in today at this site
+            active_res = supabase.table("attendance").select("name").eq("date", today_str).eq("location", sel_site).is_("check_out", "null").execute()
+            already_in = [a['name'] for a in active_res.data]
         except Exception as e:
-            st.error(f"Could not load children: {e}")
-            names = []
+            st.error(f"Could not load attendance roster: {e}")
+            all_names = []
+            already_in = []
 
-        if names:
-            sel_kids = st.multiselect("Select children to Check-In:", names)
-            if st.button("Confirm Check In", type="primary"):
-                if sel_kids:
-                    for n in sel_kids:
-                        # FIXED: Added "location": sel_site to match database schema structures
-                        supabase.table("attendance").insert({
-                            "name": n, 
-                            "location": sel_site,
-                            "date": str(datetime.now().date()), 
-                            "check_in": datetime.now().strftime("%H:%M:%S")
-                        }).execute()
-                    st.success(f"Successfully checked in {len(sel_kids)} children!")
-                    st.rerun()
-                else:
-                    st.warning("Please select at least one child.")
+        if all_names:
+            # Layout children in a clean 3-column touchscreen grid
+            arr_cols = st.columns(3)
+            
+            for idx, child_name in enumerate(all_names):
+                with arr_cols[idx % 3]:
+                    if child_name in already_in:
+                        # Disabled visual anchor showing the child is safely in the building
+                        st.button(
+                            f"✅ {child_name} (IN)", 
+                            key=f"signin_done_{idx}", 
+                            disabled=True, 
+                            use_container_width=True
+                        )
+                    else:
+                        # Clickable button to immediately sign the child in
+                        if st.button(
+                            f"➕ {child_name}", 
+                            key=f"signin_btn_{idx}", 
+                            type="secondary", 
+                            use_container_width=True
+                        ) :
+                            try:
+                                supabase.table("attendance").insert({
+                                    "name": child_name, 
+                                    "location": sel_site,
+                                    "date": today_str, 
+                                    "check_in": datetime.now().strftime("%H:%M:%S")
+                                }).execute()
+                                st.success(f"Signed in {child_name}!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to check in: {e}")
         else:
             st.info("No children registered at this site yet. Go to Admin Settings to register them.")
 
