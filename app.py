@@ -163,6 +163,126 @@ elif page == "Attendance":
                         }).eq("id", child_id).execute()
                         if c_key in st.session_state: del st.session_state[c_key]
                         st.rerun()
+# --- 6b. NCS COMPLIANCE MANAGEMENT ---
+elif page == "NCS Compliance":
+    st.title("🇪🇺 National Childcare Scheme (NCS) Compliance Dashboard")
+    st.caption("Aligned with Pobal & Early Years Hive Guidelines for Pobal Visit Officer (VO) Inspections.")
+    
+    # 1. Fetch Registered Funding Contracts
+    st.subheader("📋 Step 1: View/Set Weekly Registered Funding Hours")
+    try:
+        kids_res = supabase.table("children").select("name", "location").eq("location", sel_site).execute()
+        site_kids = sorted([k['name'] for k in kids_res.data])
+    except Exception as e:
+        st.error(f"Error loading children data: {e}")
+        site_kids = []
+
+    if not site_kids:
+        st.info(f"No children registered at {sel_site} yet.")
+    else:
+        # Create a dictionary in session state to manage mock registered CHICK hours locally 
+        # (In production, map this to an 'ncs_registered_hours' column in your 'children' table)
+        if "reg_hours" not in st.session_state:
+            st.session_state.reg_hours = {name: 20 for name in site_kids} # default standard 20 hours
+            
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            target_child = st.selectbox("Select Child to Adjust Hive CHICK Registration", site_kids)
+        with col2:
+            st.session_state.reg_hours[target_child] = st.number_input(
+                "Registered Weekly Hours", 
+                min_value=0, max_value=45, value=st.session_state.reg_hours.get(target_child, 20)
+            )
+
+        st.divider()
+
+        # 2. Date Selection for Weekly Return Processing
+        st.subheader("📅 Step 2: Compile Weekly Hive Submission Audit")
+        selected_week_start = st.date_input("Select Week Start Date (Monday)", value=datetime.now().date())
+        
+        # Calculate full week dates (Mon-Fri)
+        week_days = [str(selected_week_start + pd.Timedelta(days=i)) for i in range(5)]
+        
+        if st.button("Calculate Compliance & Generate Hive Returns", type="primary", use_container_width=True):
+            try:
+                # Fetch attendance logs for all days of the selected week
+                att_res = supabase.table("attendance").select("*").in_("date", week_days).execute()
+                att_data = att_res.data
+                
+                compliance_report = []
+                
+                for child_name in site_kids:
+                    # Filter matching child rows for this specific week
+                    child_logs = [log for log in att_data if log['name'] == child_name]
+                    
+                    total_actual_hours = 0.0
+                    total_ncs_rounded_hours = 0
+                    days_attended = 0
+                    
+                    for log in child_logs:
+                        if log['check_in'] and log['check_out']:
+                            days_attended += 1
+                            fmt = "%H:%M:%S"
+                            start = datetime.strptime(log['check_in'], fmt)
+                            end = datetime.strptime(log['check_out'], fmt)
+                            
+                            # Exact raw runtime math hours
+                            duration_hours = (end - start).total_seconds() / 3600
+                            total_actual_hours += duration_hours
+                            
+                            # Official Pobal Daily Rounding Rule: Partial hours always round up to next whole integer
+                            total_ncs_rounded_hours += math.ceil(duration_hours)
+                    
+                    # Fetch target registered limit metrics
+                    registered_hours = st.session_state.reg_hours.get(child_name, 20)
+                    
+                    # Core Funding / NCS Rule check: Cannot claim more than registered max award limit
+                    hours_to_claim = min(total_ncs_rounded_hours, registered_hours)
+                    
+                    # Under-Attendance Watchdog Risk Calculations
+                    under_attending = total_ncs_rounded_hours < registered_hours
+                    variance = registered_hours - total_ncs_rounded_hours if under_attending else 0
+                    
+                    compliance_report.append({
+                        "Child": child_name,
+                        "Days Present": days_attended,
+                        "Actual Active Hours": round(total_actual_hours, 2),
+                        "Daily Rounded Total": total_ncs_rounded_hours,
+                        "Hive CHICK Cap": registered_hours,
+                        "Claimable Hive Hours": hours_to_claim,
+                        "Under-Attendance Flag": "⚠️ Under-Attending" if under_attending else "✅ Compliant",
+                        "Variance (Hours Lost)": variance
+                    })
+                
+                if compliance_report:
+                    df_comp = pd.DataFrame(compliance_report)
+                    st.success("📊 Compiled Pobal Compliance Matrices Successfully!")
+                    
+                    # Highlight issues clearly
+                    st.dataframe(
+                        df_comp.style.map(
+                            lambda x: "background-color: #ffcccc; color: black;" if x == "⚠️ Under-Attending" else "",
+                            subset=["Under-Attendance Flag"]
+                        ),
+                        use_container_width=True
+                    )
+                    
+                    # Under-attendance warnings notice box breakdown summaries
+                    flagged_kids = df_comp[df_comp["Under-Attendance Flag"] == "⚠️ Under-Attending"]
+                    if not flagged_kids.empty:
+                        with st.warning("🚨 **Pobal Audit Warning Risk Alerts:**"):
+                            st.write(
+                                "The children listed below are attending *fewer hours* than their registered Hive contract. "
+                                "If this consistent tracking variance trend patterns continue for **8 consecutive weeks**, "
+                                "parents will receive a warning notice. At **12 weeks**, claims will be automatically reduced based on actual averages."
+                            )
+                            for _, row in flagged_kids.iterrows():
+                                st.write(f"- **{row['Child']}**: Short by **{row['Variance (Hours Lost)']} hours** this week.")
+                else:
+                    st.info("No logs encountered for any child tracking against the targeted range criteria metrics.")
+                    
+            except Exception as e:
+                st.error(f"Could not calculate compliance totals: {e}")
 
 # --- 7. ADMIN SETTINGS (ENROLLMENT) ---
 elif page == "Admin Settings":
