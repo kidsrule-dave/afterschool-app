@@ -196,7 +196,10 @@ elif page == "Attendance":
                     c_name = child_data['name']
                     with bus_cols[i % 2]:
                         if c_name in already_in:
-# --- 6b. NCS COMPLIANCE & REPORTS MANAGEMENT ---
+
+                            
+                            
+                            # --- 6b. NCS COMPLIANCE & REPORTS MANAGEMENT ---
 elif page == "NCS Compliance":
     st.title("🇪🇺 NCS Compliance & Attendance Reports")
     st.caption("Aligned with Pobal & Early Years Hive Guidelines for Pobal Visit Officer (VO) Inspections.")
