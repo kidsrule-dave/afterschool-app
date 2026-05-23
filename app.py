@@ -205,6 +205,7 @@ elif page == "Admin Settings":
 st.divider()
 st.header("📊 Daily Attendance Report")
 r_date = st.date_input("Select Report Date", datetime.now().date())
+
 if st.button("Generate Live Report Data"):
     try:
         att_data = supabase.table("attendance").select("*").eq("date", str(r_date)).execute()
@@ -217,8 +218,14 @@ if st.button("Generate Live Report Data"):
             # Safe fallbacks if column data fields are missing 
             if 'collected_by' not in df.columns:
                 df['collected_by'] = "N/A"
-            
-            # Select and rename columns cleanly
+            if 'hours' not in df.columns:
+                df['hours'] = 0
+                
             df = df[["name", "check_in", "check_out", "collected_by", "hours"]]
             df.columns = ["Child Name", "Sign In Time", "Sign Out Time", "Collected By", "Total Hours Calculated"]
             st.dataframe(df, use_container_width=True)
+        else:
+            st.info("No attendance records match this location for the selected date.")
+            
+    except Exception as e:
+        st.error(f"Error compiling report data: {e}")
