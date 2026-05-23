@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import math
+import io
 from datetime import datetime
 from supabase import create_client, Client
 from streamlit_drawable_canvas import st_canvas
