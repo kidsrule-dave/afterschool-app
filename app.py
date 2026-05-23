@@ -406,11 +406,11 @@ elif page == "NCS Compliance":
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
-# --- 7. ADMIN ---
+# --- 7. ADMIN SETTINGS (ENROLLMENT) ---
 elif page == "Admin Settings":
     st.title("⚙️ Administration Portal")
     if not st.session_state.get('admin_auth'):
-        u, p = st.text_input("Username"), st.text_input("Password", type="password")
+        u, p = st.text_input("Username", key="admin_user"), st.text_input("Password", type="password", key="admin_pass")
         if st.button("Login"):
             if u == "dave" and p == "bonnie123":
                 st.session_state['admin_auth'] = True
@@ -421,19 +421,41 @@ elif page == "Admin Settings":
         st.subheader("➕ Enroll New Child")
         with st.form("enrollment_form", clear_on_submit=True):
             new_name = st.text_input("Child's Full Name")
-            new_loc = st.selectbox("Assigned Base Site Location", sites, index=sites.index(sel_site))
+            new_loc = st.selectbox("Assigned Base Site Hub", sites, index=sites.index(sel_site))
+            
+            schools_list = ["Boyle National School", "Elphin NS", "Ballinameen NS", "Keadue NS", "Roscommon Convent", "Other"]
+            assigned_school = st.selectbox("School Attended", schools_list)
+            
+            st.write("**Weekly Bus Schedule Bookings:**")
+            col_d1, col_d2, col_d3, col_d4, col_d5 = st.columns(5)
+            with col_d1: mon = st.checkbox("Mon", value=True)
+            with col_d2: tue = st.checkbox("Tue", value=True)
+            with col_d3: wed = st.checkbox("Wed", value=True)
+            with col_d4: thu = st.checkbox("Thu", value=True)
+            with col_d5: fri = st.checkbox("Fri", value=True)
+            
             allergies = st.text_area("Allergies / Medical Notes", value="None")
             
             submit_enrollment = st.form_submit_button("Save Child to Database")
             if submit_enrollment:
                 if new_name.strip() != "":
+                    active_days = []
+                    if mon: active_days.append("Monday")
+                    if tue: active_days.append("Tuesday")
+                    if wed: active_days.append("Wednesday")
+                    if thu: active_days.append("Thursday")
+                    if fri: active_days.append("Friday")
+                    
                     try:
                         supabase.table("children").insert({
                             "name": new_name.strip(),
                             "location": new_loc,
+                            "school": assigned_school,
+                            "collection_days": active_days,
                             "allergies": allergies
                         }).execute()
-                        st.success(f"🎉 {new_name} successfully added to database at {new_loc}!")
+                        st.success(f"🎉 {new_name} successfully enrolled!")
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Failed to save child: {e}")
                 else:
@@ -442,7 +464,6 @@ elif page == "Admin Settings":
         if st.button("Logout from Admin Panel"):
             st.session_state['admin_auth'] = False
             st.rerun()
-
 # --- 8. GLOBAL REPORTS ---
 st.divider()
 st.header("📊 Daily Attendance Report")
