@@ -197,10 +197,12 @@ elif page == "Attendance":
                     with bus_cols[i % 2]:
                         if c_name in already_in:
 # --- 6b. NCS COMPLIANCE & REPORTS MANAGEMENT ---
-    elif page == "NCS Compliance":
+elif page == "NCS Compliance":
     st.title("🇪🇺 NCS Compliance & Attendance Reports")
     st.caption("Aligned with Pobal & Early Years Hive Guidelines for Pobal Visit Officer (VO) Inspections.")
     
+    # 1. Fetch Registered Funding Contracts
+    st.subheader("📋 Step 1: Manage Weekly Registered Funding Hours")
     try:
         kids_res = supabase.table("children").select("name", "location").eq("location", sel_site).execute()
         site_kids = sorted([k['name'] for k in kids_res.data])
@@ -225,6 +227,7 @@ elif page == "Attendance":
 
         st.divider()
 
+        # 2. Select Report Type
         st.subheader("📊 Step 2: Choose Report Configuration")
         report_type = st.radio("Select Report Interval", ["Weekly Hive Audit", "Monthly Attendance Summary"], horizontal=True)
 
@@ -282,6 +285,7 @@ elif page == "Attendance":
                 except Exception as e:
                     st.error(f"Could not calculate weekly totals: {e}")
 
+            # Display Weekly Results and Export Button
             if "last_weekly_report" in st.session_state:
                 df_w = st.session_state["last_weekly_report"]
                 w_date = st.session_state["last_weekly_date"]
@@ -295,6 +299,7 @@ elif page == "Attendance":
                     use_container_width=True
                 )
                 
+                # Export Utility
                 clean_filename = f"Weekly_NCS_Return_{sel_site}_Week_{w_date}.xlsx"
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
@@ -312,7 +317,7 @@ elif page == "Attendance":
                     use_container_width=True
                 )
 
-        # --- CONFIGURATION B: MONTHLY ATTENDANCE SUMMARY REPORT ---
+                # --- CONFIGURATION B: MONTHLY ATTENDANCE SUMMARY REPORT ---
         elif report_type == "Monthly Attendance Summary":
             col_m, col_y = st.columns(2)
             with col_m:
@@ -320,13 +325,18 @@ elif page == "Attendance":
                 selected_month_name = st.selectbox("Select Month", months, index=datetime.now().month - 1)
                 month_idx = months.index(selected_month_name) + 1
             with col_y:
+                # FIXED: Restored the actual years array list parameter values inside the selectbox
                 selected_year = st.selectbox("Select Year", ["2025", "2026", "2027", "2028"], index=1)
 
             if st.button("Generate Monthly Attendance Report", type="primary", use_container_width=True):
                 try:
+                    # FIXED: Create standard calendar start and end boundaries to support Native Postgres Date Columns
                     start_date = f"{selected_year}-{str(month_idx).zfill(2)}-01"
+                    
+                    # Calculate end of month dynamically using Pandas
                     end_date = str((pd.to_datetime(start_date) + pd.offsets.MonthEnd(0)).date())
                     
+                    # Safely fetch entries between the first and last day of the targeted month
                     att_res = supabase.table("attendance").select("*")\
                         .gte("date", start_date)\
                         .lte("date", end_date)\
@@ -354,6 +364,7 @@ elif page == "Attendance":
                                 if log.get('collected_by'):
                                     collector_breakdown.append(log['collected_by'])
                         
+                        # Find most common person picking up the child this month
                         frequent_collector = max(set(collector_breakdown), key=collector_breakdown.count) if collector_breakdown else "N/A"
                         
                         monthly_report.append({
@@ -374,10 +385,29 @@ elif page == "Attendance":
                 except Exception as e:
                     st.error(f"Could not calculate monthly totals: {e}")
 
+            # Display Monthly Results and Export Button
             if "last_monthly_report" in st.session_state:
-                df_m = st.session_state["last_monthly_report"]                            
-   # --- 7. ADMIN SETTINGS (ENROLLMENT) ---
-elif page == "Admin Settings":             
+                df_m = st.session_state["last_monthly_report"]
+                meta_date = st.session_state["last_monthly_meta"]
+                
+                st.write(f"### 📅 Business Summary Grid: {meta_date.replace('_', ' ')}")
+                st.dataframe(df_m, use_container_width=True)
+                
+                # Monthly Export Utility
+                clean_filename = f"Monthly_Attendance_{sel_site}_{meta_date}.xlsx"
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+                    df_m.to_excel(writer, sheet_name="Monthly Attendance Overview", index=False)
+
+                st.download_button(
+                    label=f"💾 Download {clean_filename}",
+                    data=buffer.getvalue(),
+                    file_name=clean_filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+# --- 7. ADMIN ---
+elif page == "Admin Settings":
     st.title("⚙️ Administration Portal")
     if not st.session_state.get('admin_auth'):
         u, p = st.text_input("Username"), st.text_input("Password", type="password")
