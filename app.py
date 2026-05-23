@@ -41,11 +41,14 @@ if page == "Dashboard":
 # --- 5. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Sign-Out")
+    st.caption("Tap a child's name to select who is collecting them.")
     
     try:
+        # 1. Fetch children registered to this site
         children_res = supabase.table("children").select("name").eq("location", sel_site).execute()
         site_child_names = [c['name'] for c in children_res.data]
         
+        # 2. Fetch active logs (children present who haven't checked out yet)
         active_res = supabase.table("attendance").select("*").is_("check_out", "null").execute()
         site_logs = [a for a in active_res.data if a['name'] in site_child_names]
     except Exception as e:
@@ -54,36 +57,77 @@ elif page == "Quick-Tap Board":
 
     if not site_logs:
         st.info(f"No children currently checked in at {sel_site}.")
-    
-    for log in site_logs:
-        child_id = log['id']
-        c_key = f"coll_{child_id}"
-        current_selection = st.session_state.get(c_key)
-
-        with st.container(border=True):
-            st.subheader(f"👤 {log['name']}")
-            st.caption(f"Checked In At: {log['check_in']}")
+    else:
+        # Layout present children in a clean 3-column grid of name buttons
+        st.write("### 👤 Children Present")
+        grid_cols = st.columns(3)
+        
+        for idx, log in enumerate(site_logs):
+            child_id = log['id']
+            child_name = log['name']
             
-            collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
-            cols = st.columns(4)
-            for i, p in enumerate(collectors):
-                b_type = "primary" if current_selection == p else "secondary"
-                if cols[i % 4].button(p, key=f"q_tap_{p}_{child_id}", type=b_type, use_container_width=True):
-                    st.session_state[c_key] = p
-                    st.rerun()
+            # Keep track of which child button is currently tapped/active
+            active_child_key = "active_tap_child_id"
+            is_active = st.session_state.get(active_child_key) == child_id
             
-            if current_selection:
-                if st.button(f"✅ Finalize Sign-Out ({current_selection})", key=f"fin_{child_id}", type="primary", use_container_width=True):
-                    now = datetime.now().strftime("%H:%M:%S")
-                    supabase.table("attendance").update({
-                        "check_out": now, 
-                        "collected_by": current_selection,
-                        "hours": ncs_round(log['check_in'], now),
-                        "notes": f"Quick-tap pickup by {current_selection}"
-                    }).eq("id", child_id).execute()
-                    if c_key in st.session_state: del st.session_state[c_key]
+            # Visual anchor: highlight the button if it is currently selected
+            b_style = "primary" if is_active else "secondary"
+            
+            with grid_cols[idx % 3]:
+                if st.button(f"👦 {child_name}", key=f"name_btn_{child_id}", type=b_style, use_container_width=True):
+                    st.session_state[active_child_key] = child_id
                     st.rerun()
 
+        st.divider()
+
+        # --- STEP 2: SHOW COLLECTOR PANEL FOR THE CLICKED CHILD ---
+        active_id = st.session_state.get("active_tap_child_id")
+        
+        if active_id:
+            # Find the full log data matching our clicked child
+            selected_log = next((l for l in site_logs if l['id'] == active_id), None)
+            
+            if selected_log:
+                c_key = f"coll_{active_id}"
+                current_collector = st.session_state.get(c_key)
+                
+                # Render a clear workspace container for the chosen child
+                with st.container(border=True):
+                    st.subheader(f"🔑 Sign-Out: {selected_log['name']}")
+                    st.write(f"🎒 *In since {selected_log['check_in']}*")
+                    st.write("---")
+                    st.write("**Who is collecting them?**")
+                    
+                    # Collector tap options layout
+                    collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
+                    coll_cols = st.columns(4)
+                    
+                    for i, p in enumerate(collectors):
+                        p_style = "primary" if current_collector == p else "secondary"
+                        if coll_cols[i % 4].button(p, key=f"q_tap_p_{p}_{active_id}", type=p_style, use_container_width=True):
+                            st.session_state[c_key] = p
+                            st.rerun()
+                    
+                    # Final Submission Confirmation Bar
+                    if current_collector:
+                        st.write("")
+                        if st.button(f"✅ Confirm: {current_collector} is picking up {selected_log['name']}", key=f"fin_qt_{active_id}", type="primary", use_container_width=True):
+                            now = datetime.now().strftime("%H:%M:%S")
+                            
+                            # Update records inside Supabase storage array
+                            supabase.table("attendance").update({
+                                "check_out": now, 
+                                "collected_by": current_collector,
+                                "hours": ncs_round(selected_log['check_in'], now),
+                                "notes": f"Quick-tap pickup by {current_collector}"
+                            }).eq("id", active_id).execute()
+                            
+                            # Reset session keys so the panel closes out completely
+                            if c_key in st.session_state: del st.session_state[c_key]
+                            if "active_tap_child_id" in st.session_state: del st.session_state["active_tap_child_id"]
+                            
+                            st.success(f"Successfully signed out {selected_log['name']}!")
+                            st.rerun()
 # --- 6. ATTENDANCE & SIGN-OUT ---
 elif page == "Attendance":
     st.title("📍 Daily Log")
