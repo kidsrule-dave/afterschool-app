@@ -255,7 +255,7 @@ elif page == "NCS Compliance":
         if "reg_hours" not in st.session_state:
             st.session_state.reg_hours = {name: 20 for name in site_kids}
             
-        col1, col2 = st.columns()
+        col1, col2 = st.columns(2)
         with col1:
             target_child = st.selectbox("Select Child to Adjust Hive CHICK Registration", site_kids)
         with col2:
