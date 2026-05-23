@@ -103,8 +103,10 @@ elif page == "Attendance":
             if st.button("Confirm Check In", type="primary"):
                 if sel_kids:
                     for n in sel_kids:
+                        # FIXED: Added "location": sel_site to match database schema structures
                         supabase.table("attendance").insert({
                             "name": n, 
+                            "location": sel_site,
                             "date": str(datetime.now().date()), 
                             "check_in": datetime.now().strftime("%H:%M:%S")
                         }).execute()
