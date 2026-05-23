@@ -356,7 +356,7 @@ elif page == "NCS Compliance":
                     use_container_width=True
                 )
 
-            # --- CONFIGURATION B: MONTHLY ATTENDANCE SUMMARY REPORT ---
+             # --- CONFIGURATION B: MONTHLY ATTENDANCE SUMMARY REPORT ---
         elif report_type == "Monthly Attendance Summary":
             col_m, col_y = st.columns(2)
             with col_m:
@@ -368,11 +368,18 @@ elif page == "NCS Compliance":
 
             if st.button("Generate Monthly Attendance Report", type="primary", use_container_width=True):
                 try:
-                    # Construct SQL wildcard pattern matching the targeted Month (YYYY-MM-%)
-                    month_pattern = f"{selected_year}-{str(month_idx).zfill(2)}-%"
+                    # FIXED: Create standard calendar start and end boundaries to support Native Postgres Date Columns
+                    start_date = f"{selected_year}-{str(month_idx).zfill(2)}-01"
                     
-                    # Fetch logs using a structured like filter matching the month prefix string
-                    att_res = supabase.table("attendance").select("*").like("date", month_pattern).execute()
+                    # Calculate end of month dynamically using Pandas
+                    end_date = str((pd.to_datetime(start_date) + pd.offsets.MonthEnd(0)).date())
+                    
+                    # Safely fetch entries between the first and last day of the targeted month
+                    att_res = supabase.table("attendance").select("*")\
+                        .gte("date", start_date)\
+                        .lte("date", end_date)\
+                        .execute()
+                    
                     att_data = att_res.data
                     
                     monthly_report = []
@@ -437,7 +444,6 @@ elif page == "NCS Compliance":
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
-
 # --- 7. ADMIN ---
 elif page == "Admin Settings":
     st.title("⚙️ Administration Portal")
