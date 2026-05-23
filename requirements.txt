@@ -9,3 +9,6 @@ supabase
 
 # Digital Signatures Component
 streamlit-drawable-canvas
+
+# xl csv
+openpyxl
