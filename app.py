@@ -215,35 +215,36 @@ elif page == "Attendance":
             all_names = []
             already_in = []
 
-if all_names:
-    arr_cols = st.columns(3)
-    for idx, child_name in enumerate(all_names):
-        with arr_cols[idx % 3]:
-            if child_name in already_in:
-                # Added _{idx} to the end of the key string
-                st.button(f"✅ {child_name} (In)", key=f"in_{child_name}_{chosen_session}_{idx}", disabled=True, use_container_width=True)
-            else:
-                # Added _{idx} to the end of the key string
-                if st.button(f"➕ {child_name}", key=f"add_{child_name}_{chosen_session}_{idx}", use_container_width=True):
-                    now = datetime.now().strftime("%H:%M:%S")
-                    try:
-                        supabase.table("attendance").insert({
-                            "name": child_name,
-                            "location": sel_site,
-                            "date": today_str,
-                            "check_in": now,
-                            "session_type": chosen_session
-                        }).execute()
-                        st.success(f"Signed in {child_name} to {chosen_session}!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Sign-in failed: {e}")
-else:
-    st.info("No children found for this location.")
+        # --- INDENTED FIXED: This block now lives correctly inside tab1 ---
+        if all_names:
+            arr_cols = st.columns(3)
+            for idx, child_name in enumerate(all_names):
+                with arr_cols[idx % 3]:
+                    if child_name in already_in:
+                        st.button(f"✅ {child_name} (In)", key=f"in_{child_name}_{chosen_session}_{idx}", disabled=True, use_container_width=True)
+                    else:
+                        if st.button(f"➕ {child_name}", key=f"add_{child_name}_{chosen_session}_{idx}", use_container_width=True):
+                            now = datetime.now().strftime("%H:%M:%S")
+                            try:
+                                supabase.table("attendance").insert({
+                                    "name": child_name,
+                                    "location": sel_site,
+                                    "date": today_str,
+                                    "check_in": now,
+                                    "session_type": chosen_session
+                                }).execute()
+                                st.success(f"Signed in {child_name} to {chosen_session}!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Sign-in failed: {e}")
+        else:
+            st.info("No children found for this location.")
 
+    # --- INDENTED FIXED: Moved outside the loop conditions back to page alignment ---
     with tab2:
         st.subheader("Manual Sign Out Logs")
         st.caption("Use the Quick-Tap Board for faster daily pick-up transactions.")
+
 # --- 8. NCS COMPLIANCE & PRINTABLE REPORTS ---
 elif page == "NCS Compliance":
     st.title("📋 Operational & NCS Reporting")
