@@ -8,8 +8,8 @@ from streamlit_drawable_canvas import st_canvas
 
 # --- 1. SECURE CONNECTION ---
 SUPABASE_URL = "https://supabase.co"
-SUPABASE_KEY = "sb_publishable_HFSxcJjKT8c0M1_UoFLznA_J6HzGbdm"
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+SUPABASE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3b2ZkdGRqcHBydnR6am1xZ2JrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5MTQzMTcsImV4cCI6MjA5MTQ5MDMxN30.jirzLPRXKfr1Z3slm-0CchvTU7lXgLtTWuCk1RDhmfQ
+supabase: Client = create_client(SUPABASE_URL, SUPABA"sb_publishable_SE_KEY)
 
 
 # --- 2. UTILS ---
@@ -51,7 +51,7 @@ elif page == "Weekly Planner":
     
     # Lock planner input if it is NOT Sunday (6 = Sunday)
     current_time = datetime.now()
-    lock_planner = current_time.weekday() != 6
+    lock_planner = False
     
     try:
         kids = supabase.table("children").select("name").eq("location", sel_site).execute()
