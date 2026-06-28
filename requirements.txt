@@ -12,3 +12,5 @@ streamlit-drawable-canvas
 
 # xl csv
 openpyxl
+
+xlsxwriter
