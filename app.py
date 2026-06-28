@@ -205,8 +205,8 @@ elif page == "Attendance":
         # Session selector filter for admissions operations
         chosen_session = st.radio("Signing into which program?", ["Afterschool", "Breakfast Club"], horizontal=True)
         
-        try:
-Use code with caution.
+         try:
+
 kids = supabase.table("children").select("name").eq("location", sel_site).execute()
 all_names = sorted([k['name'] for k in kids.data])
 active_res = supabase.table("attendance").select("name").eq("date", today_str).eq("location", sel_site).eq("session_type", chosen_session).is_("check_out", "null").execute()
