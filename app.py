@@ -11,6 +11,7 @@ SUPABASE_URL = "https://supabase.co"
 SUPABASE_KEY = "sb_publishable_HFSxcJjKT8c0M1_UoFLznA_J6HzGbdm"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+
 # --- 2. UTILS ---
 def ncs_round(check_in, check_out):
     fmt = "%H:%M:%S"
