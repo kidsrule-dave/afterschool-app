@@ -215,7 +215,7 @@ elif page == "Attendance":
             all_names = []
             already_in = []
 
-       if all_names:
+    if all_names:
     arr_cols = st.columns(3)
     for idx, child_name in enumerate(all_names):
         with arr_cols[idx % 3]:
