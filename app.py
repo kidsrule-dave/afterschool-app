@@ -205,42 +205,44 @@ elif page == "Attendance":
         # Session selector filter for admissions operations
         chosen_session = st.radio("Signing into which program?", ["Afterschool", "Breakfast Club"], horizontal=True)
         
-         try:
+        try:
+            kids = supabase.table("children").select("name").eq("location", sel_site).execute()
+            all_names = sorted([k['name'] for k in kids.data])
+            
+            active_res = supabase.table("attendance").select("name").eq("date", today_str).eq("location", sel_site).eq("session_type", chosen_session).is_("check_out", "null").execute()
+            already_in = [a['name'] for a in active_res.data]
+        except Exception as e:
+            st.error(f"Could not load attendance roster: {e}")
+            all_names = []
+            already_in = []
 
-kids = supabase.table("children").select("name").eq("location", sel_site).execute()
-all_names = sorted([k['name'] for k in kids.data])
-active_res = supabase.table("attendance").select("name").eq("date", today_str).eq("location", sel_site).eq("session_type", chosen_session).is_("check_out", "null").execute()
-already_in = [a['name'] for a in active_res.data]
-except Exception as e:
-st.error(f"Could not load attendance roster: {e}")
-all_names = []
-already_in = []
-if all_names:
-arr_cols = st.columns(3)
-for idx, child_name in enumerate(all_names):
-with arr_cols[idx % 3]:
-if child_name in already_in:
-st.button(f"✅ {child_name} (In)", key=f"in_{child_name}{chosen_session}", disabled=True, use_container_width=True)
-else:
-if st.button(f"➕ {child_name}", key=f"add{child_name}_{chosen_session}", use_container_width=True):
-now = datetime.now().strftime("%H:%M:%S")
-try:
-supabase.table("attendance").insert({
-"name": child_name,
-"location": sel_site,
-"date": today_str,
-"check_in": now,
-"session_type": chosen_session
-}).execute()
-st.success(f"Signed in {child_name} to {chosen_session}!")
-st.rerun()
-except Exception as e:
-st.error(f"Sign-in failed: {e}")
-else:
-st.info("No children found for this location.")
-with tab2:
-st.subheader("Manual Sign Out Logs")
-st.caption("Use the Quick-Tap Board for faster daily pick-up transactions.")
+        if all_names:
+            arr_cols = st.columns(3)
+            for idx, child_name in enumerate(all_names):
+                with arr_cols[idx % 3]:
+                    if child_name in already_in:
+                        st.button(f"✅ {child_name} (In)", key=f"in_{child_name}_{chosen_session}", disabled=True, use_container_width=True)
+                    else:
+                        if st.button(f"➕ {child_name}", key=f"add_{child_name}_{chosen_session}", use_container_width=True):
+                            now = datetime.now().strftime("%H:%M:%S")
+                            try:
+                                supabase.table("attendance").insert({
+                                    "name": child_name,
+                                    "location": sel_site,
+                                    "date": today_str,
+                                    "check_in": now,
+                                    "session_type": chosen_session
+                                }).execute()
+                                st.success(f"Signed in {child_name} to {chosen_session}!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Sign-in failed: {e}")
+        else:
+            st.info("No children found for this location.")
+
+    with tab2:
+        st.subheader("Manual Sign Out Logs")
+        st.caption("Use the Quick-Tap Board for faster daily pick-up transactions.")
 --- 8. NCS COMPLIANCE & PRINTABLE REPORTS ---
 elif page == "NCS Compliance":
 st.title("📋 Operational & NCS Reporting")
