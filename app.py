@@ -7,7 +7,7 @@ from supabase import create_client, Client
 from streamlit_drawable_canvas import st_canvas
 
 # --- 1. SECURE CONNECTION ---
-SUPABASE_URL = "https://wwofdtdjpprvtzjmqgbk.supabase.co"
+SUPABASE_URL = "https://supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3b2ZkdGRqcHBydnR6am1xZ2JrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5MTQzMTcsImV4cCI6MjA5MTQ5MDMxN30.jirzLPRXKfr1Z3slm-0CchvTU7lXgLtTWuCk1RDhmfQ"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -137,9 +137,9 @@ elif page == "Quick-Tap Board":
             b_style = "primary" if is_active else "secondary"
             
             with grid_cols[idx % 3]:
-                # Differentiate morning vs afternoon logs on dashboards
+                # Unique iteration tracker index avoids duplicate element conflicts
                 label = f"🌅 {child_name} (BC)" if session_type == "Breakfast Club" else f"👦 {child_name} (AS)"
-                if st.button(label, key=f"name_btn_{child_id}", type=b_style, use_container_width=True):
+                if st.button(label, key=f"qt_name_btn_{child_id}_{idx}", type=b_style, use_container_width=True):
                     st.session_state[active_child_key] = child_id
                     st.rerun()
 
@@ -171,7 +171,7 @@ elif page == "Quick-Tap Board":
                     
                     for i, p in enumerate(collectors):
                         p_style = "primary" if current_collector == p else "secondary"
-                        if coll_cols[i % 4].button(p, key=f"q_tap_p_{p}_{active_id}", type=p_style, use_container_width=True):
+                        if coll_cols[i % 4].button(p, key=f"q_tap_p_{p}_{active_id}_{i}", type=p_style, use_container_width=True):
                             st.session_state[c_key] = p
                             st.rerun()
                     
@@ -204,6 +204,7 @@ elif page == "Attendance":
         
         # Session selector filter for admissions operations
         chosen_session = st.radio("Signing into which program?", ["Afterschool", "Breakfast Club"], horizontal=True)
+        )
         
         try:
             kids = supabase.table("children").select("name").eq("location", sel_site).execute()
