@@ -243,7 +243,7 @@ elif page == "Attendance":
     with tab2:
         st.subheader("Manual Sign Out Logs")
         st.caption("Use the Quick-Tap Board for faster daily pick-up transactions.")
---- 8. NCS COMPLIANCE & PRINTABLE REPORTS ---
+# --- 8. NCS COMPLIANCE & PRINTABLE REPORTS ---
 elif page == "NCS Compliance":
 st.title("📋 Operational & NCS Reporting")
 rep_tab1, rep_tab2, rep_tab3 = st.tabs([
