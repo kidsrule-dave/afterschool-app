@@ -137,7 +137,6 @@ elif page == "Quick-Tap Board":
             b_style = "primary" if is_active else "secondary"
             
             with grid_cols[idx % 3]:
-                # Unique iteration tracker index avoids duplicate element conflicts
                 label = f"🌅 {child_name} (BC)" if session_type == "Breakfast Club" else f"👦 {child_name} (AS)"
                 if st.button(label, key=f"qt_name_btn_{child_id}_{idx}", type=b_style, use_container_width=True):
                     st.session_state[active_child_key] = child_id
@@ -204,7 +203,6 @@ elif page == "Attendance":
         
         # Session selector filter for admissions operations
         chosen_session = st.radio("Signing into which program?", ["Afterschool", "Breakfast Club"], horizontal=True)
-        )
         
         try:
             kids = supabase.table("children").select("name").eq("location", sel_site).execute()
