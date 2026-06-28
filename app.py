@@ -243,114 +243,106 @@ elif page == "Attendance":
     with tab2:
         st.subheader("Manual Sign Out Logs")
         st.caption("Use the Quick-Tap Board for faster daily pick-up transactions.")
-# --- 8. NCS COMPLIANCE & PRINTABLE REPORTS ---
+--- 8. NCS COMPLIANCE & PRINTABLE REPORTS ---
 elif page == "NCS Compliance":
-    st.title("📋 Operational & NCS Reporting")
-    
-    rep_tab1, rep_tab2, rep_tab3 = st.tabs([
-        "📅 Weekly Booking Sheets", 
-        "📝 Today's Sign-In Manifest", 
-        "📊 Raw NCS System Export"
-    ])
-    
-    # REPORT 1: SHOW WHO IS BOOKED IN ADVANCE FOR EACH DAY AT THIS SITE
-    with rep_tab1:
-        st.subheader(f"🗓️ Upcoming Weekly Bookings: {sel_site}")
-        st.caption("This report aggregates what parents chose on their Sunday planners.")
-        
-        try:
-            bk_res = supabase.table("weekly_bookings").select("*").eq("location", sel_site).execute()
-            if bk_res.data:
-                bk_df = pd.DataFrame(bk_res.data)
-                
-                # Format true/false fields into visual checkmarks
-                bk_df["Breakfast Club"] = bk_df["breakfast_club"].apply(lambda x: "✅ Yes" if x else "❌ No")
-                bk_df["Afterschool"] = bk_df["afterschool"].apply(lambda x: "✅ Yes" if x else "❌ No")
-                
-                # Clean columns to show
-                clean_bk = bk_df[["child_name", "day_of_week", "Breakfast Club", "Afterschool"]].rename(columns={"child_name": "Child Name", "day_of_week": "Scheduled Day"})
-                st.dataframe(clean_bk, use_container_width=True)
-                
-                # Excel Generation
-                buf_bk = io.BytesIO()
-                with pd.ExcelWriter(buf_bk, engine='xlsxwriter') as wr:
-                    clean_bk.to_excel(wr, sheet_name='Weekly Bookings', index=False)
-                
-                st.download_button(
-                    label="📥 Print/Download Weekly Booking Roster",
-                    data=buf_bk.getvalue(),
-                    file_name=f"weekly_bookings_{sel_site}_{datetime.now().date()}.xlsx",
-                    mime="application/vnd.ms-excel"
-                )
-            else:
-                st.info("No parents have logged weekly schedules for this site yet.")
-        except Exception as e:
-            st.error(f"Error compiling weekly bookings: {e}")
-
-    # REPORT 2: TODAY'S LIVE SIGN-IN MANIFEST (TIMES, COLLECTORS)
-    with rep_tab2:
-        today_date = str(datetime.now().date())
-        st.subheader(f"⏱️ Live Daily Manifest: {sel_site} ({today_date})")
-        st.caption("Real-time list of tracking entries logged today.")
-        
-        try:
-            today_res = supabase.table("attendance").select("*").eq("location", sel_site).eq("date", today_date).execute()
-            if today_res.data:
-                td_df = pd.DataFrame(today_res.data)
-                
-                # Fill empty cells with placeholder markers nicely
-                td_df["check_out"] = td_df["check_out"].fillna("Still Present")
-                td_df["collected_by"] = td_df["collected_by"].fillna("—")
-                
-                clean_td = td_df[["name", "session_type", "check_in", "check_out", "collected_by"]].rename(columns={
-                    "name": "Child Name",
-                    "session_type": "Program",
-                    "check_in": "Time In",
-                    "check_out": "Time Out",
-                    "collected_by": "Collected By"
-                })
-                
-                st.dataframe(clean_td, use_container_width=True)
-                
-                # Excel Generation
-                buf_td = io.BytesIO()
-                with pd.ExcelWriter(buf_td, engine='xlsxwriter') as wr:
-                    clean_td.to_excel(wr, sheet_name='Today Logs', index=False)
-                
-                st.download_button(
-                    label="📥 Print/Download Today's Roster Manifest",
-                    data=buf_td.getvalue(),
-                    file_name=f"daily_manifest_{sel_site}_{today_date}.xlsx",
-                    mime="application/vnd.ms-excel"
-                )
-            else:
-                st.info("No attendance entries have been checked in today.")
-        except Exception as e:
-            st.error(f"Error fetching daily logs: {e}")
-
-    # REPORT 3: HISTORICAL EXPORTS
-    with rep_tab3:
-        st.subheader("📋 Complete Historical Compliance Database")
-        try:
-            att_data = supabase.table("attendance").select("*").eq("location", sel_site).execute()
-            if att_data.data:
-                df = pd.DataFrame(att_data.data)
-                st.dataframe(df)
-                
-                buffer = io.BytesIO()
-                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                    df.to_excel(writer, sheet_name='Attendance', index=False)
-                
-                st.download_button(
-                    label="📥 Download Historical Compliance Excel Report",
-                    data=buffer.getvalue(),
-                    file_name=f"ncs_report_{sel_site}_{datetime.now().date()}.xlsx",
-                    mime="application/vnd.ms-excel"
-                )
-            else:
-                st.info("No logs saved yet for reporting operations pipelines.")
-        except Exception as e:
-            st.error(f"Report configuration failure: {e}")
+st.title("📋 Operational & NCS Reporting")
+rep_tab1, rep_tab2, rep_tab3 = st.tabs([
+"📅 Weekly Booking Sheets",
+"📝 Today's Sign-In Manifest",
+"📊 Raw NCS System Export"
+])
+# REPORT 1: SHOW WHO IS BOOKED IN ADVANCE FOR EACH DAY AT THIS SITE
+with rep_tab1:
+st.subheader(f"🗓️ Upcoming Weekly Bookings: {sel_site}")
+st.caption("This report aggregates what parents chose on their Sunday planners.")
+try:
+bk_res = supabase.table("weekly_bookings").select("*").eq("location", sel_site).execute()
+if bk_res.data:
+bk_df = pd.DataFrame(bk_res.data)
+# Format true/false fields into visual checkmarks
+bk_df["Breakfast Club"] = bk_df["breakfast_club"].apply(lambda x: "✅ Yes" if x else "❌ No")
+bk_df["Afterschool"] = bk_df["afterschool"].apply(lambda x: "✅ Yes" if x else "❌ No")
+# Clean columns to show
+clean_bk = bk_df[["child_name", "day_of_week", "Breakfast Club", "Afterschool"]].rename(columns={"child_name": "Child Name", "day_of_week": "Scheduled Day"})
+st.dataframe(clean_bk, use_container_width=True)
+# Excel Generation
+buf_bk = io.BytesIO()
+with pd.ExcelWriter(buf_bk, engine='xlsxwriter') as wr:
+clean_bk.to_excel(wr, sheet_name='Weekly Bookings', index=False)
+st.download_button(
+label="📥 Print/Download Weekly Booking Roster",
+data=buf_bk.getvalue(),
+file_name=f"weekly_bookings_{sel_site}_{datetime.now().date()}.xlsx",
+mime="application/vnd.ms-excel"
+)
+else:
+st.info("No parents have logged weekly schedules for this site yet.")
+except Exception as e:
+st.error(f"Error compiling weekly bookings: {e}")
+# REPORT 2: TODAY'S LIVE SIGN-IN MANIFEST (TIMES, COLLECTORS)
+with rep_tab2:
+today_date = str(datetime.now().date())
+st.subheader(f"⏱️ Live Daily Manifest: {sel_site} ({today_date})")
+st.caption("Real-time list of tracking entries logged today.")
+try:
+today_res = supabase.table("attendance").select("*").eq("location", sel_site).eq("date", today_date).execute()
+if today_res.data:
+td_df = pd.DataFrame(today_res.data)
+# Fill empty cells with placeholder markers nicely
+td_df["check_out"] = td_df["check_out"].fillna("Still Present")
+td_df["collected_by"] = td_df["collected_by"].fillna("—")
+clean_td = td_df[["name", "session_type", "check_in", "check_out", "collected_by"]].rename(columns={
+"name": "Child Name",
+"session_type": "Program",
+"check_in": "Time In",
+"check_out": "Time Out",
+"collected_by": "Collected By"
+})
+st.dataframe(clean_td, use_container_width=True) [1]
+# Excel Generation
+buf_td = io.BytesIO()
+with pd.ExcelWriter(buf_td, engine='xlsxwriter') as wr:
+clean_td.to_excel(wr, sheet_name='Today Logs', index=False)
+st.download_button(
+label="📥 Print/Download Today's Roster Manifest",
+data=buf_td.getvalue(),
+file_name=f"daily_manifest_{sel_site}_{today_date}.xlsx",
+mime="application/vnd.ms-excel"
+)
+else:
+st.info("No attendance entries have been checked in today.")
+except Exception as e:
+st.error(f"Error fetching daily logs: {e}")
+# REPORT 3: HISTORICAL EXPORTS
+with rep_tab3:
+st.subheader("📋 Complete Historical Compliance Database")
+try:
+att_data = supabase.table("attendance").select("*").eq("location", sel_site).execute()
+if att_data.data:
+df = pd.DataFrame(att_data.data)
+st.dataframe(df)
+buffer = io.BytesIO()
+with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+df.to_excel(writer, sheet_name='Attendance', index=False)
+st.download_button(
+label="📥 Download Historical Compliance Excel Report",
+data=buffer.getvalue(),
+file_name=f"ncs_report_{sel_site}_{datetime.now().date()}.xlsx",
+mime="application/vnd.ms-excel"
+)
+else:
+st.info("No logs saved yet for reporting operations pipelines.")
+except Exception as e:
+st.error(f"Report configuration failure: {e}") [1]
+--- 9. ADMIN SETTINGS & SECURITY ---
+elif page == "Admin Settings":
+st.title("🛠️ Admin Configuration Settings")
+# Safety password entry verification field check
+password_input = st.text_input("Enter Admin Access Password Key", type="password")
+if password_input:
+if password_input == "manager123": # Password set to manager123
+st.success("Access Granted.")
+st.write("---")
 st.subheader("👨💻 Register New Child Profile")
 with st.form("register_child_form"):
 new_name = st.text_input("Child Name")
