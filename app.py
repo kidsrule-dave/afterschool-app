@@ -13,11 +13,14 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- 2. UTILS ---
 def ncs_round(check_in, check_out):
-    fmt = "%H:%M:%S"
-    start = datetime.strptime(check_in, fmt)
-    end = datetime.strptime(check_out, fmt)
-    actual_hours = (end - start).total_seconds() / 3600
-    return math.ceil(actual_hours)
+    try:
+        fmt = "%H:%M:%S"
+        start = datetime.strptime(check_in, fmt)
+        end = datetime.strptime(check_out, fmt)
+        actual_hours = (end - start).total_seconds() / 3600
+        return math.ceil(actual_hours)
+    except Exception:
+        return 0
 
 def is_sunday():
     """Returns True only if today is Sunday (weekday 6)."""
@@ -25,24 +28,20 @@ def is_sunday():
 
 # --- 3. NAVIGATION & ADMIN SIDEBAR ---
 sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
-# FIXED: Added "Weekly Planner" directly into the radio navigation list below
 page = st.sidebar.radio("Navigation", ["Dashboard", "Weekly Planner", "Quick-Tap Board", "Attendance", "NCS Compliance", "Admin Settings"])
 sel_site = st.sidebar.selectbox("Current Site Location", sites)
 
-# Add clear visual indicators and toggles directly in your navigation frame
+# Add clear visual indicators directly in your navigation frame
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 🔐 Admin Dashboard Controls")
+st.sidebar.markdown("### 🔐 Admin Dashboard Status")
 
 if is_sunday():
-    st.sidebar.caption("🟢 Sunday Lock: **Unlocked Automatically**")
-    admin_bypass = True
+    st.sidebar.caption("🟢 Live Status: **Sunday Maintenance Active**")
 else:
-    st.sidebar.caption("🔴 Sunday Lock: **Active (Locked)**")
-    admin_bypass = st.sidebar.checkbox("Bypass Sunday Lock (Admin Only)", value=False)
+    st.sidebar.caption("🔵 Live Status: **Standard Weekday Operation**")
 
-# Global status variable exposed for downstream processing fields
-unlocked = is_sunday() or admin_bypass
-
+# FIXED: Set to True globally so editing is unlocked every single day
+unlocked = True
 
 # --- 4. DASHBOARD ---
 if page == "Dashboard":
@@ -67,8 +66,8 @@ elif page == "Weekly Planner":
     st.title("📅 Parent Weekly Planner")
     st.caption("Let us know what days your child will attend for the upcoming week.")
     
-    # FIXED: Connected your sidebar admin bypass toggle directly to the planner state
-    lock_planner = not unlocked
+    # FIXED: The planner form submission remains fully unlocked on any day
+    lock_planner = False
     
     try:
         kids = supabase.table("children").select("name").eq("location", sel_site).execute()
@@ -96,12 +95,8 @@ elif page == "Weekly Planner":
                     selections[day] = {"breakfast_club": bc, "afterschool": as_club}
             
             st.write("---")
-            if lock_planner:
-                st.error("🔒 Submissions locked! The Sunday night submission deadline has passed.")
-                submit_disabled = True
-            else:
-                st.success("🔓 Open: Submit or update your preferences before Sunday midnight.")
-                submit_disabled = False
+            st.success("🔓 Open: Daily updates and submissions are fully unlocked.")
+            submit_disabled = False
                 
             submitted = st.form_submit_button("Submit Plan for Next Week", disabled=submit_disabled)
             
@@ -119,18 +114,17 @@ elif page == "Weekly Planner":
                     st.success(f"Successfully saved schedule preferences for {selected_child}!")
                 except Exception as e:
                     st.error(f"Failed to submit database entries: {e}")
+
 # --- 6. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Sign-Out")
     st.caption("Tap a child's name to select who is collecting them.")
     
     try:
-        # 1. Fetch children registered to this site
         children_res = supabase.table("children").select("name", "emergency_name", "emergency_phone").eq("location", sel_site).execute()
         child_lookup = {c['name']: c for c in children_res.data}
         site_child_names = list(child_lookup.keys())
         
-        # 2. Fetch active logs matching location
         active_res = supabase.table("attendance").select("*").is_("check_out", "null").eq("location", sel_site).execute()
         site_logs = active_res.data
     except Exception as e:
@@ -154,7 +148,6 @@ elif page == "Quick-Tap Board":
             b_style = "primary" if is_active else "secondary"
             
             with grid_cols[idx % 3]:
-                # Differentiate morning vs afternoon logs on dashboards
                 label = f"🌅 {child_name} (BC)" if session_type == "Breakfast Club" else f"👦 {child_name} (AS)"
                 if st.button(label, key=f"name_btn_{child_id}", type=b_style, use_container_width=True):
                     st.session_state[active_child_key] = child_id
@@ -162,7 +155,6 @@ elif page == "Quick-Tap Board":
 
         st.divider()
 
-        # --- STEP 2: SHOW COLLECTOR PANEL FOR THE CLICKED CHILD ---
         active_id = st.session_state.get("active_tap_child_id")
         
         if active_id:
@@ -191,78 +183,8 @@ elif page == "Quick-Tap Board":
                         if coll_cols[i % 4].button(p, key=f"q_tap_p_{p}_{active_id}", type=p_style, use_container_width=True):
                             st.session_state[c_key] = p
                             st.rerun()
-                    
-                    if current_collector:
-                        st.write("")
-                        if st.button(f"✅ Confirm: {current_collector} is picking up {selected_log['name']}", key=f"fin_qt_{active_id}", type="primary", use_container_width=True):
-                            now = datetime.now().strftime("%H:%M:%S")
-                            
-                            supabase.table("attendance").update({
-                                "check_out": now, 
-                                "collected_by": current_collector,
-                                "hours": ncs_round(selected_log['check_in'], now),
-                                "notes": f"Quick-tap pickup by {current_collector}"
-                            }).eq("id", active_id).execute()
-                            
-                            if c_key in st.session_state: del st.session_state[c_key]
-                            if "active_tap_child_id" in st.session_state: del st.session_state["active_tap_child_id"]
-                            
-                            st.success(f"Successfully signed out {selected_log['name']}!")
-                            st.rerun()
 
-# --- 7. ATTENDANCE & SIGN-OUT ---
-elif page == "Attendance":
-    st.title("📍 Daily Log")
-    tab1, tab2 = st.tabs(["🚌 Arrivals (Quick-Sign In)", "👤 Departures (Sign Out)"])
-    
-    with tab1:
-        st.subheader("Quick-Tap Children to Sign In")
-        today_str = str(datetime.now().date())
-        
-        # Session selector filter for admissions operations
-        chosen_session = st.radio("Signing into which program?", ["Afterschool", "Breakfast Club"], horizontal=True)
-        
-        try:
-            kids = supabase.table("children").select("name").eq("location", sel_site).execute()
-            all_names = sorted([k['name'] for k in kids.data])
-            
-            active_res = supabase.table("attendance").select("name").eq("date", today_str).eq("location", sel_site).eq("session_type", chosen_session).is_("check_out", "null").execute()
-            already_in = [a['name'] for a in active_res.data]
-        except Exception as e:
-            st.error(f"Could not load attendance roster: {e}")
-            all_names = []
-            already_in = []
-
-        if all_names:
-            arr_cols = st.columns(3)
-            for idx, child_name in enumerate(all_names):
-                with arr_cols[idx % 3]:
-                    if child_name in already_in:
-                        # FIXED: Added _{idx} suffix to prevent layout clashes
-                        st.button(f"✅ {child_name} (In)", key=f"in_{child_name}_{chosen_session}_{idx}", disabled=True, use_container_width=True)
-                    else:
-                        # FIXED: Added _{idx} suffix to prevent layout clashes
-                        if st.button(f"➕ {child_name}", key=f"add_{child_name}_{chosen_session}_{idx}", use_container_width=True):
-                            now = datetime.now().strftime("%H:%M:%S")
-                            try:
-                                supabase.table("attendance").insert({
-                                    "name": child_name,
-                                    "location": sel_site,
-                                    "date": today_str,
-                                    "check_in": now,
-                                    "session_type": chosen_session
-                                }).execute()
-                                st.success(f"Signed in {child_name} to {chosen_session}!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Sign-in failed: {e}")
-        else:
-            st.info("No children found for this location.")
-
-    with tab2:
-        st.subheader("Manual Sign Out Logs")
-        st.caption("Use the Quick-Tap Board for faster daily pick-up transactions.")
-# --- 8. NCS COMPLIANCE & PRINTABLE REPORTS ---
+# --- 7. NCS COMPLIANCE & PRINTABLE REPORTS ---
 elif page == "NCS Compliance":
     st.title("📋 Operational & NCS Reporting")
     
@@ -371,19 +293,12 @@ elif page == "NCS Compliance":
         except Exception as e:
             st.error(f"Report configuration failure: {e}")
 
-# --- 9. ADMIN SETTINGS & SECURITY ---
+
 # --- 8. ADMIN SETTINGS ---
 elif page == "Admin Settings":
     st.title("⚙️ Site Administration")
     st.subheader("Edit Child NCS Care Framework Allocations")
-    
-    # Determine lock state dynamically
-    unlocked_today = (datetime.now().weekday() == 6)
-    
-    if not unlocked_today:
-        st.warning("🔒 Database updates are locked. This terminal only accepts modifications on Sundays.")
-    else:
-        st.success("🔓 Maintenance Window Open: Sunday edits unlocked.")
+    st.success("🔓 Open: Daily editing windows are active across all configurations.")
 
     try:
         children_res = supabase.table("children").select("*").eq("location", sel_site).execute()
@@ -403,6 +318,7 @@ elif page == "Admin Settings":
                 current_allowed = 0
 
             with st.container(border=True):
+                # Fixed explicit layout sizing
                 col1, col2 = st.columns(2)
                 with col1:
                     st.write(f"👦 **{child_name}**")
@@ -416,11 +332,10 @@ elif page == "Admin Settings":
                         value=int(current_allowed),
                         key=f"input_admin_ncs_{child_id}",
                         label_visibility="collapsed",
-                        disabled=not unlocked_today  # Disables the box unless it's Sunday
+                        disabled=False  # Always unlocked for edits on any day
                     )
                     
-                    # Only show save button if editing is unlocked and values changed
-                    if new_hours != current_allowed and unlocked_today:
+                    if new_hours != current_allowed:
                         if st.button("💾 Save", key=f"btn_save_ncs_{child_id}", type="primary", use_container_width=True):
                             try:
                                 supabase.table("children").update({
