@@ -402,49 +402,51 @@ else:
 st.info("No logs saved yet for reporting operations pipelines.")
 except Exception as e:
 st.error(f"Report configuration failure: {e}")
---- 8. ADMIN SETTINGS ---
+# --- 8. ADMIN SETTINGS ---
 elif page == "Admin Settings":
-st.title("⚙️ Site Administration")
-st.subheader("Edit Child NCS Care Framework Allocations")
-st.success("🔓 Open: Daily editing windows are active across all configurations.")
-try:
-children_res = supabase.table("children").select("*").eq("location", sel_site).execute()
-children_data = children_res.data
-except Exception as e:
-st.error(f"Error fetching roster records: {e}")
-children_data = []
-if not children_data:
-st.info("No records match your selected database location.")
-else:
-for child in children_data:
-child_id = child.get("id")
-child_name = child.get("name")
-current_allowed = child.get("ncs_hours_allowed", 0)
-if current_allowed is None:
-current_allowed = 0
-with st.container(border=True):
-col1, col2 = st.columns(2)
-with col1:
-st.write(f"👦 {child_name}")
-st.caption(f"Configured Limit: {current_allowed} hours per week")
-with col2:
-new_hours = st.number_input(
-"Weekly NCS Limit",
-min_value=0,
-max_value=168,
-value=int(current_allowed),
-key=f"input_admin_ncs_{child_id}",
-label_visibility="collapsed",
-disabled=False
-)
-if new_hours != current_allowed:
-if st.button("💾 Save", key=f"btn_save_ncs_{child_id}", type="primary", use_container_width=True):
-try:
-supabase.table("children").update({
-"ncs_hours_allowed": new_hours
-}).eq("id", child_id).execute()
-st.success(f"Saved update for {child_name}!")
-st.rerun()
-except Exception as e:
-st.error(f"Failed database transaction: {e}")
- 
+    st.title("⚙️ Site Administration")
+    st.subheader("Edit Child NCS Care Framework Allocations")
+    st.success("🔓 Open: Daily editing windows are active across all configurations.")
+    
+    try:
+        children_res = supabase.table("children").select("*").eq("location", sel_site).execute()
+        children_data = children_res.data
+    except Exception as e:
+        st.error(f"Error fetching roster records: {e}")
+        children_data = []
+        
+    if not children_data:
+        st.info("No records match your selected database location.")
+    else:
+        for child in children_data:
+            child_id = child.get("id")
+            child_name = child.get("name")
+            current_allowed = child.get("ncs_hours_allowed", 0)
+            if current_allowed is None:
+                current_allowed = 0
+                
+            with st.container(border=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"👦 **{child_name}**")
+                    st.caption(f"Configured Limit: **{current_allowed}** hours per week")
+                with col2:
+                    new_hours = st.number_input(
+                        "Weekly NCS Limit",
+                        min_value=0,
+                        max_value=168,
+                        value=int(current_allowed),
+                        key=f"input_admin_ncs_{child_id}",
+                        label_visibility="collapsed",
+                        disabled=False
+                    )
+                    if new_hours != current_allowed:
+                        if st.button("💾 Save", key=f"btn_save_ncs_{child_id}", type="primary", use_container_width=True):
+                            try:
+                                supabase.table("children").update({
+                                    "ncs_hours_allowed": new_hours
+                                }).eq("id", child_id).execute()
+                                st.success(f"Saved update for {child_name}!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed database transaction: {e}")
