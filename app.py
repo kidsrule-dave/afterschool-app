@@ -19,14 +19,29 @@ def ncs_round(check_in, check_out):
     actual_hours = (end - start).total_seconds() / 3600
     return math.ceil(actual_hours)
 
-# --- 3. NAVIGATION ---
+def is_sunday():
+    """Returns True only if today is Sunday (weekday 6)."""
+    return datetime.now().weekday() == 6
+
+# --- 3. NAVIGATION & ADMIN SIDEBAR ---
 sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
 page = st.sidebar.radio("Navigation", ["Dashboard", "Quick-Tap Board", "Attendance", "NCS Compliance", "Admin Settings"])
 sel_site = st.sidebar.selectbox("Current Site Location", sites)
 
-# ➕ ADD THIS HERE: Secret Admin Override toggle in Sidebar
+# Add clear visual indicators and toggles directly in your navigation frame
 st.sidebar.markdown("---")
-admin_bypass = st.sidebar.checkbox("🔓 Bypass Sunday Lock (Admin Only)", value=False)
+st.sidebar.markdown("### 🔐 Admin Dashboard Controls")
+
+if is_sunday():
+    st.sidebar.caption("🟢 Sunday Lock: **Unlocked Automatically**")
+    admin_bypass = True
+else:
+    st.sidebar.caption("🔴 Sunday Lock: **Active (Locked)**")
+    admin_bypass = st.sidebar.checkbox("Bypass Sunday Lock (Admin Only)", value=False)
+
+# Global status variable exposed for downstream processing fields
+unlocked = is_sunday() or admin_bypass
+
 
 # --- 4. DASHBOARD ---
 if page == "Dashboard":
