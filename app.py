@@ -381,27 +381,29 @@ elif page == "NCS Compliance":
         except Exception as e:
             st.error(f"Audit analysis pipeline error: {e}")
 
-    # --- REPORT 5: HISTORICAL EXPORTS ---
+  # --- REPORT 5: HISTORICAL EXPORTS ---
     with rep_tab5:
         st.subheader("📋 Complete Historical Compliance Database")
         try:
-           att_data = supabase.table("attendance").select("*").eq("location", sel_site).execute()
-if att_data.data:
-df = pd.DataFrame(att_data.data)
-st.dataframe(df)
-buffer = io.BytesIO()
-with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-df.to_excel(writer, sheet_name='Attendance', index=False)
-st.download_button(
-label="📥 Download Historical Compliance Excel Report",
-data=buffer.getvalue(),
-file_name=f"ncs_report_{sel_site}_{datetime.now().date()}.xlsx",
-mime="application/vnd.ms-excel"
-)
-else:
-st.info("No logs saved yet for reporting operations pipelines.")
-except Exception as e:
-st.error(f"Report configuration failure: {e}")
+            att_data = supabase.table("attendance").select("*").eq("location", sel_site).execute()
+            if att_data.data:
+                df = pd.DataFrame(att_data.data)
+                st.dataframe(df)
+                
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                    df.to_excel(writer, sheet_name='Attendance', index=False)
+                
+                st.download_button(
+                    label="📥 Download Historical Compliance Excel Report",
+                    data=buffer.getvalue(),
+                    file_name=f"ncs_report_{sel_site}_{datetime.now().date()}.xlsx",
+                    mime="application/vnd.ms-excel"
+                )
+            else:
+                st.info("No logs saved yet for reporting operations pipelines.")
+        except Exception as e:
+            st.error(f"Report configuration failure: {e}")
 # --- 8. ADMIN SETTINGS ---
 elif page == "Admin Settings":
     st.title("⚙️ Site Administration")
