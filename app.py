@@ -118,7 +118,6 @@ elif page == "Quick-Tap Board":
                             st.success(f"Successfully signed out {selected_log['name']}!")
                             st.rerun()
 
-
 # --- 6. ATTENDANCE & SIGN-IN ---
 elif page == "Attendance":
     st.title("📍 Daily Log")
@@ -165,7 +164,6 @@ elif page == "Attendance":
     with tab2:
         st.subheader("Manual Deviations & Notes")
         st.caption("Review or append operational details to today's active sign-out transactions.")
-        # Additional manual check-out adjustments can be handled here in your design framework
 
 # --- 7. NCS COMPLIANCE & REPORTING ---
 elif page == "NCS Compliance":
@@ -173,11 +171,9 @@ elif page == "NCS Compliance":
     st.caption(f"Review calculated attendance caps and flags for **{sel_site}**.")
 
     try:
-        # Fetch children definitions
         kids_res = supabase.table("children").select("id", "name", "ncs_hours_allowed").eq("location", sel_site).execute()
         kids_data = kids_res.data
 
-        # Fetch attendance histories with completed check-out entries
         attendance_res = supabase.table("attendance").select("*").eq("location", sel_site).is_not("check_out", "null").execute()
         att_data = attendance_res.data
     except Exception as e:
@@ -196,7 +192,6 @@ elif page == "NCS Compliance":
             if allowed_hours is None:
                 allowed_hours = 0
             
-            # Sum up hours matching this child's name
             child_logs = [log for log in att_data if log.get("name") == c_name]
             total_used_hours = 0
             
@@ -221,16 +216,18 @@ elif page == "NCS Compliance":
             })
 
         report_df = pd.DataFrame(report_rows)
-         # Summary Overview Widgets
+        
+        # Summary Overview Metric Card
         st.metric(
-Use label="Children Over Allocated Threshold",
-value=overage_count,
-delta=f"{overage_count} flags active" if overage_count > 0 else "All Clear",
-delta_color="inverse" if overage_count > 0 else "normal"
-)
+            label="Children Over Allocated Threshold", 
+            value=overage_count, 
+            delta=f"{overage_count} flags active" if overage_count > 0 else "All Clear",
+            delta_color="inverse" if overage_count > 0 else "normal"
+        )
+        
+Use code with caution.
 # Structured Tabular Log Overview
 st.dataframe(report_df, use_container_width=True, hide_index=True)
-
 --- 8. ADMIN SETTINGS ---
 elif page == "Admin Settings":
 st.title("⚙️ Site Administration")
@@ -252,7 +249,7 @@ current_allowed = child.get("ncs_hours_allowed", 0)
 if current_allowed is None:
 current_allowed = 0
 with st.container(border=True):
-col1, col2 = st.columns([2, 1])
+col1, col2 = st.columns()
 with col1:
 st.write(f"👦 {child_name}")
 st.caption(f"Configured Limit: {current_allowed} hours per week")
