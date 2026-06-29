@@ -50,7 +50,6 @@ if page == "Dashboard":
     today = str(datetime.now().date())
     
     try:
-        # Check headcount for both separate programs for this site location
         bc_res = supabase.table("attendance").select("id", count="exact").eq("date", today).eq("location", sel_site).eq("session_type", "Breakfast Club").is_("check_out", "null").execute()
         as_res = supabase.table("attendance").select("id", count="exact").eq("date", today).eq("location", sel_site).eq("session_type", "Afterschool").is_("check_out", "null").execute()
         
@@ -68,9 +67,8 @@ elif page == "Weekly Planner":
     st.title("📅 Parent Weekly Planner")
     st.caption("Let us know what days your child will attend for the upcoming week.")
     
-    # Lock planner input if it is NOT Sunday (6 = Sunday)
-    current_time = datetime.now()
-    lock_planner = current_time.weekday() != 6
+    # FIXED: Connected your sidebar admin bypass toggle directly to the planner state
+    lock_planner = not unlocked
     
     try:
         kids = supabase.table("children").select("name").eq("location", sel_site).execute()
@@ -102,7 +100,7 @@ elif page == "Weekly Planner":
                 st.error("🔒 Submissions locked! The Sunday night submission deadline has passed.")
                 submit_disabled = True
             else:
-                st.info("🔓 Open: Submit or update your preferences before Sunday midnight.")
+                st.success("🔓 Open: Submit or update your preferences before Sunday midnight.")
                 submit_disabled = False
                 
             submitted = st.form_submit_button("Submit Plan for Next Week", disabled=submit_disabled)
@@ -120,8 +118,7 @@ elif page == "Weekly Planner":
                         }, on_conflict="child_name,day_of_week").execute()
                     st.success(f"Successfully saved schedule preferences for {selected_child}!")
                 except Exception as e:
-                    st.error(f"Failed to submit database layout entries: {e}")
-
+                    st.error(f"Failed to submit database entries: {e}")
 # --- 6. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Sign-Out")
