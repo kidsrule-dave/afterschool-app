@@ -355,34 +355,61 @@ elif page == "NCS Compliance":
             st.error(f"Report configuration failure: {e}")
 
 # --- 9. ADMIN SETTINGS & SECURITY ---
+# --- 8. ADMIN SETTINGS ---
 elif page == "Admin Settings":
-    st.title("🛠️ Admin Configuration Settings")
+    st.title("⚙️ Site Administration")
+    st.subheader("Edit Child NCS Care Framework Allocations")
     
-    # Safety password entry verification field check
-    password_input = st.text_input("Enter Admin Access Password Key", type="password")
+    # Determine lock state dynamically
+    unlocked_today = (datetime.now().weekday() == 6)
     
-    if password_input:
-        if password_input == "manager123":  # Password set to manager123
-            st.success("Access Granted.")
-            st.write("---")
-            st.subheader("👨‍💻 Register New Child Profile")
-            
-            with st.form("register_child_form"):
-                new_name = st.text_input("Child Name")
-                e_name = st.text_input("Emergency Contact Person Name")
-                e_phone = st.text_input("Emergency Contact Phone Number")
+    if not unlocked_today:
+        st.warning("🔒 Database updates are locked. This terminal only accepts modifications on Sundays.")
+    else:
+        st.success("🔓 Maintenance Window Open: Sunday edits unlocked.")
+
+    try:
+        children_res = supabase.table("children").select("*").eq("location", sel_site).execute()
+        children_data = children_res.data
+    except Exception as e:
+        st.error(f"Error fetching roster records: {e}")
+        children_data = []
+
+    if not children_data:
+        st.info("No records match your selected database location.")
+    else:
+        for child in children_data:
+            child_id = child.get("id")
+            child_name = child.get("name")
+            current_allowed = child.get("ncs_hours_allowed", 0)
+            if current_allowed is None:
+                current_allowed = 0
+
+            with st.container(border=True):
+                col1, col2 = st.columns()
+                with col1:
+                    st.write(f"👦 **{child_name}**")
+                    st.caption(f"Configured Limit: **{current_allowed}** hours per week")
                 
-                reg_submitted = st.form_submit_button("Save New Registration Profile")
-                if reg_submitted and new_name:
-                    try:
-                        supabase.table("children").insert({
-                            "name": new_name,
-                            "location": sel_site,
-                            "emergency_name": e_name,
-                            "emergency_phone": e_phone
-                        }).execute()
-                        st.success(f"Successfully registered child profile record for {new_name}!")
-                    except Exception as e:
-                        st.error(f"Failed to submit profile layout parameters: {e}")
-        else:
-            st.error("Incorrect password. Access denied.")
+                with col2:
+                    new_hours = st.number_input(
+                        "Weekly NCS Limit",
+                        min_value=0,
+                        max_value=168,
+                        value=int(current_allowed),
+                        key=f"input_admin_ncs_{child_id}",
+                        label_visibility="collapsed",
+                        disabled=not unlocked_today  # Disables the box unless it's Sunday
+                    )
+                    
+                    # Only show save button if editing is unlocked and values changed
+                    if new_hours != current_allowed and unlocked_today:
+                        if st.button("💾 Save", key=f"btn_save_ncs_{child_id}", type="primary", use_container_width=True):
+                            try:
+                                supabase.table("children").update({
+                                    "ncs_hours_allowed": new_hours
+                                }).eq("id", child_id).execute()
+                                st.success(f"Saved update for {child_name}!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed database transaction: {e}")
