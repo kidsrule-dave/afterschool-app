@@ -221,9 +221,11 @@ elif page == "Attendance":
             for idx, child_name in enumerate(all_names):
                 with arr_cols[idx % 3]:
                     if child_name in already_in:
-                        st.button(f"✅ {child_name} (In)", key=f"in_{child_name}_{chosen_session}", disabled=True, use_container_width=True)
+                        # FIXED: Added _{idx} suffix to prevent layout clashes
+                        st.button(f"✅ {child_name} (In)", key=f"in_{child_name}_{chosen_session}_{idx}", disabled=True, use_container_width=True)
                     else:
-                        if st.button(f"➕ {child_name}", key=f"add_{child_name}_{chosen_session}", use_container_width=True):
+                        # FIXED: Added _{idx} suffix to prevent layout clashes
+                        if st.button(f"➕ {child_name}", key=f"add_{child_name}_{chosen_session}_{idx}", use_container_width=True):
                             now = datetime.now().strftime("%H:%M:%S")
                             try:
                                 supabase.table("attendance").insert({
