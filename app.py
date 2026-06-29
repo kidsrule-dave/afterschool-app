@@ -228,7 +228,7 @@ elif page == "NCS Compliance":
 
 # Structured Tabular Log Overview
 st.dataframe(report_df, use_container_width=True, hide_index=True)
-#--- 8. ADMIN SETTINGS ---
+--- 8. ADMIN SETTINGS ---
 elif page == "Admin Settings":
 st.title("⚙️ Site Administration")
 st.subheader("Edit Child NCS Care Framework Allocations")
