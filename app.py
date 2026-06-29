@@ -403,7 +403,7 @@ elif page == "Admin Settings":
                 current_allowed = 0
 
             with st.container(border=True):
-                col1, col2 = st.columns()
+                col1, col2 = st.columns(2)
                 with col1:
                     st.write(f"👦 **{child_name}**")
                     st.caption(f"Configured Limit: **{current_allowed}** hours per week")
