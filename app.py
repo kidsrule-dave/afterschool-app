@@ -224,8 +224,8 @@ elif page == "NCS Compliance":
             delta=f"{overage_count} flags active" if overage_count > 0 else "All Clear",
             delta_color="inverse" if overage_count > 0 else "normal"
         )
-        
-Use code with caution.
+     
+
 # Structured Tabular Log Overview
 st.dataframe(report_df, use_container_width=True, hide_index=True)
 --- 8. ADMIN SETTINGS ---
