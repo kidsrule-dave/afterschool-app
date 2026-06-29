@@ -462,48 +462,93 @@ elif page == "NCS Compliance":
 # --- 9. ADMIN SETTINGS ---
 elif page == "Admin Settings":
     st.title("⚙️ Site Administration")
-    st.subheader("Edit Child NCS Care Framework Allocations")
-    st.success("🔓 Open: Daily editing windows are active across all configurations.")
     
-    try:
-        children_res = supabase.table("children").select("*").eq("location", sel_site).execute()
-        children_data = children_res.data
-    except Exception as e:
-        st.error(f"Error fetching roster records: {e}")
-        children_data = []
+    # Create two clear tabs: one for registering new kids, one for managing hours
+    admin_tab1, admin_tab2 = st.tabs(["➕ Register New Child", "🎒 Manage NCS Care Frameworks"])
+    
+    # --- TAB 1: ADD NEW CHILDREN TO THE SYSTEM ---
+    with admin_tab1:
+        st.subheader(f"👤 Add a New Child to {sel_site}")
+        st.caption("Fill out the profile details below to register a child to this specific site location.")
         
-    if not children_data:
-        st.info("No records match your selected database location.")
-    else:
-        for child in children_data:
-            child_id = child.get("id")
-            child_name = child.get("name")
-            current_allowed = child.get("ncs_hours_allowed", 0)
-            if current_allowed is None:
-                current_allowed = 0
+        with st.form("add_child_form", clear_on_submit=True):
+            new_name = st.text_input("Child's Full Name", placeholder="e.g. John Doe")
+            
+            col_meta1, col_meta2 = st.columns(2)
+            with col_meta1:
+                emergency_name = st.text_input("Primary Emergency Contact Name", placeholder="e.g. Mary Doe (Mom)")
+            with col_meta2:
+                emergency_phone = st.text_input("Emergency Contact Phone Number", placeholder="e.g. 087 123 4567")
                 
-            with st.container(border=True):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write(f"👦 **{child_name}**")
-                    st.caption(f"Configured Limit: **{current_allowed}** hours per week")
-                with col2:
-                    new_hours = st.number_input(
-                        "Weekly NCS Limit",
-                        min_value=0,
-                        max_value=168,
-                        value=int(current_allowed),
-                        key=f"input_admin_ncs_{child_id}",
-                        label_visibility="collapsed",
-                        disabled=False
-                    )
-                    if new_hours != current_allowed:
-                        if st.button("💾 Save", key=f"btn_save_ncs_{child_id}", type="primary", use_container_width=True):
-                            try:
-                                supabase.table("children").update({
-                                    "ncs_hours_allowed": new_hours
-                                }).eq("id", child_id).execute()
-                                st.success(f"Saved update for {child_name}!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Failed database transaction: {e}")
+            starting_ncs = st.number_input("Initial Weekly NCS Allowed Hours", min_value=0, max_value=168, value=0)
+            
+            submit_new_child = st.form_submit_button("➕ Save and Register Child Profile", type="primary")
+            
+            if submit_new_child:
+                if not new_name.strip():
+                    st.error("Please enter a valid name for the child.")
+                else:
+                    try:
+                        supabase.table("children").insert({
+                            "name": new_name.strip(),
+                            "location": sel_site,
+                            "emergency_name": emergency_name.strip() if emergency_name else "Not Listed",
+                            "emergency_phone": emergency_phone.strip() if emergency_phone else "Not Listed",
+                            "ncs_hours_allowed": int(starting_ncs)
+                        }).execute()
+                        st.success(f"🎉 Successfully registered {new_name} to the {sel_site} hub database!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to create child profile: {e}")
+
+    # --- TAB 2: EDIT EXISTING NCS HOURS ALLOWANCES ---
+    with admin_tab2:
+        st.subheader("Edit Active NCS Hour Allocations")
+        st.caption(f"Assign maximum claimable weekly child-care constraints for existing children at **{sel_site}**.")
+        st.success("🔓 Open: Daily editing windows are active across all configurations.")
+    
+        try:
+            children_res = supabase.table("children").select("*").eq("location", sel_site).execute()
+            children_data = children_res.data
+        except Exception as e:
+            st.error(f"Error fetching roster records: {e}")
+            children_data = []
+            
+        if not children_data:
+            st.info("No records match your selected database location.")
+        else:
+            # Sort children alphabetically by name
+            sorted_children = sorted(children_data, key=lambda x: x.get('name', ''))
+            
+            for child in sorted_children:
+                child_id = child.get("id")
+                child_name = child.get("name")
+                current_allowed = child.get("ncs_hours_allowed", 0)
+                if current_allowed is None:
+                    current_allowed = 0
+                    
+                with st.container(border=True):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write(f"👦 **{child_name}**")
+                        st.caption(f"Configured Limit: **{current_allowed}** hours per week")
+                    with col2:
+                        new_hours = st.number_input(
+                            "Weekly NCS Limit",
+                            min_value=0,
+                            max_value=168,
+                            value=int(current_allowed),
+                            key=f"input_admin_ncs_{child_id}",
+                            label_visibility="collapsed",
+                            disabled=False
+                        )
+                        if new_hours != current_allowed:
+                            if st.button("💾 Save", key=f"btn_save_ncs_{child_id}", type="primary", use_container_width=True):
+                                try:
+                                    supabase.table("children").update({
+                                        "ncs_hours_allowed": new_hours
+                                    }).eq("id", child_id).execute()
+                                    st.success(f"Saved update for {child_name}!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Failed database transaction: {e}")
