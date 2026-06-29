@@ -21,8 +21,12 @@ def ncs_round(check_in, check_out):
 
 # --- 3. NAVIGATION ---
 sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
-page = st.sidebar.radio("Navigation", ["Dashboard", "Weekly Planner", "Quick-Tap Board", "Attendance", "NCS Compliance", "Admin Settings"])
+page = st.sidebar.radio("Navigation", ["Dashboard", "Quick-Tap Board", "Attendance", "NCS Compliance", "Admin Settings"])
 sel_site = st.sidebar.selectbox("Current Site Location", sites)
+
+# ➕ ADD THIS HERE: Secret Admin Override toggle in Sidebar
+st.sidebar.markdown("---")
+admin_bypass = st.sidebar.checkbox("🔓 Bypass Sunday Lock (Admin Only)", value=False)
 
 # --- 4. DASHBOARD ---
 if page == "Dashboard":
