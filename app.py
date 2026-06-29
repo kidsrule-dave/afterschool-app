@@ -330,13 +330,15 @@ elif page == "NCS Compliance":
         except Exception as e:
             st.error(f"Error fetching daily logs: {e}")
 
-    # REPORT 3: WEEKLY ATTENDANCE SUMMARY
+    # --- REPORT 3: WEEKLY ATTENDANCE SUMMARY ---
     with rep_tab3:
         st.subheader(f"📊 Total Attended Hours by Week: {sel_site}")
         st.caption("Calculates total completed hours attended per individual child grouped by calendar week numbers.")
         
         try:
-            raw_att = supabase.table("attendance").select("*").eq("location", sel_site).is_not("check_out", "null").execute()
+            # FIXED: Swapped out invalid .is_not() with native .not_.is_() function parameter
+            raw_att = supabase.table("attendance").select("*").eq("location", sel_site).not_.is_("check_out", "null").execute()
+            
             if raw_att.data:
                 all_att_df = pd.DataFrame(raw_att.data)
                 all_att_df['parsed_date'] = pd.to_datetime(all_att_df['date'])
@@ -346,13 +348,18 @@ elif page == "NCS Compliance":
                     all_att_df['hours'] = all_att_df.apply(lambda r: ncs_round(r['check_in'], r['check_out']), axis=1)
                 all_att_df['hours'] = all_att_df['hours'].fillna(0)
                 
-                weekly_pivot = all_att_df.pivot_table(index='name', columns='Year-Week', values='hours', aggfunc='sum').fillna(0)
+                weekly_pivot = all_att_df.pivot_table(
+                    index='name',
+                    columns='Year-Week',
+                    values='hours',
+                    aggfunc='sum'
+                ).fillna(0)
+                
                 st.dataframe(weekly_pivot, use_container_width=True)
                 
                 buf_piv = io.BytesIO()
                 with pd.ExcelWriter(buf_piv, engine='xlsxwriter') as wr:
                     weekly_pivot.to_excel(wr, sheet_name='Weekly Log Overview')
-                
                 st.download_button(
                     label="📥 Download Weekly Attendance Grid",
                     data=buf_piv.getvalue(),
@@ -363,14 +370,16 @@ elif page == "NCS Compliance":
                 st.info("No completed logs available to construct tracking summaries.")
         except Exception as e:
             st.error(f"Could not calculate summary metrics: {e}")
- # REPORT 4: UNUSED NCS HOURS AUDIT
+
+    # --- REPORT 4: UNUSED NCS HOURS AUDIT ---
     with rep_tab4:
         st.subheader(f"⚠️ Unused Allowed Hours Audit: {sel_site}")
         st.caption("Identifies children whose attended hours fall below their allocated claim limits for the current week.")
         
         try:
             kids_res = supabase.table("children").select("id", "name", "ncs_hours_allowed").eq("location", sel_site).execute()
-            attendance_res = supabase.table("attendance").select("*").eq("location", sel_site).is_not("check_out", "null").execute()
+            # FIXED: Swapped out invalid .is_not() with native .not_.is_() function parameter
+            attendance_res = supabase.table("attendance").select("*").eq("location", sel_site).not_.is_("check_out", "null").execute()
             
             if kids_res.data:
                 kids_df = pd.DataFrame(kids_res.data)
@@ -427,7 +436,6 @@ elif page == "NCS Compliance":
                 st.info("No children configurations found to audit.")
         except Exception as e:
             st.error(f"Audit analysis pipeline error: {e}")
-
     # --- REPORT 5: HISTORICAL EXPORTS ---
     with rep_tab5:
         st.subheader("📋 Complete Historical Compliance Database")
