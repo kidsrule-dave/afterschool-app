@@ -5,6 +5,8 @@ import io
 from datetime import datetime
 from supabase import create_client, Client
 from streamlit_drawable_canvas import st_canvas
+# ADD THE LOGO HERE - It will sit at the very top of your sidebar
+st.sidebar.image("kidsrule-logo.png", use_container_width=True)
 
 # --- 1. SECURE CONNECTION ---
 SUPABASE_URL = "https://wwofdtdjpprvtzjmqgbk.supabase.co"
