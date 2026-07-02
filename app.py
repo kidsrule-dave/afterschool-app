@@ -210,7 +210,7 @@ elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
     st.subheader("Register a New Child")
     
-     with st.form("register_child_form", clear_on_submit=True):
+        with st.form("register_child_form", clear_on_submit=True):
         new_name = st.text_input("Child's Full Name")
         new_location = st.selectbox("Assign Site Location", sites)
         
