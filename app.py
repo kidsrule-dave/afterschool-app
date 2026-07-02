@@ -544,9 +544,6 @@ elif page == "Admin Settings":
             else:
                 st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
 
-            else:
-                st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
-
     # --- 9B. ARCHIVE AND COMPLIANCE NOTICE ---
     st.markdown("---")
     st.info("🔒 **Data Retention Lock Active:** In accordance with Pobal and Tusla childcare regulations, permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
