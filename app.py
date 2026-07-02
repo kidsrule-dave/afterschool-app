@@ -544,38 +544,14 @@ elif page == "Admin Settings":
             else:
                 st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
 
-    # --- 9B. REMOVE A CHILD SECTION ---
+            else:
+                st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
+
+    # --- 9B. ARCHIVE AND COMPLIANCE NOTICE ---
     st.markdown("---")
-    st.subheader("🗑️ Remove a Child from System")
-    st.caption(f"Select a child registered at {sel_site} to remove their profile.")
-    
-    try:
-        kids_to_delete_res = supabase.table("children").select("name").eq("location", sel_site).execute()
-        delete_roster = sorted([k['name'] for k in kids_to_delete_res.data])
-    except Exception as e:
-        st.error(f"Error loading deletion roster: {e}")
-        delete_roster = []
-        
-    if not delete_roster:
-        st.info(f"No children currently registered at {sel_site} to delete.")
-    else:
-        with st.form("delete_child_form"):
-            child_to_remove = st.selectbox("Select Child to Delete", delete_roster)
-            st.warning(f"⚠️ Warning: This will permanently remove {child_to_remove} from the registry.")
-            confirm_delete = st.checkbox(f"I confirm that I want to delete {child_to_remove} permanently.")
-            delete_submitted = st.form_submit_button("Delete Child Profile")
-            
-            if delete_submitted:
-                if confirm_delete:
-                    try:
-                        supabase.table("children").delete().eq("name", child_to_remove).eq("location", sel_site).execute()
-                        st.success(f"💥 Successfully removed {child_to_remove} from the database.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Failed to delete record: {e}")
-                else:
-                    st.error("Please check the confirmation box before attempting to delete.")
+    st.info("🔒 **Data Retention Lock Active:** In accordance with Pobal and Tusla childcare regulations, permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
 
 # --- 10. GLOBAL FALLBACK ---
 else:
     st.title(f"📄 {page}")
+    st.info("Placeholder configuration panel layout.")
