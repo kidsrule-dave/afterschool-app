@@ -680,3 +680,77 @@ elif page == "Admin Settings":
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Failed database transaction: {e}")
+
+# --- 9. NCS COMPLIANCE ---
+elif page == "NCS Compliance":
+    st.title("📊 NCS Compliance Dashboard")
+    st.caption(f"Reviewing calculated attendance hours for compliance mapping at **{sel_site}**.")
+
+    try:
+        # Fetch records that have completed check-outs for the selected site
+        compliance_res = (
+            supabase.table("attendance")
+            .select("date", "name", "session_type", "check_in", "check_out", "collected_by", "calculated_hours")
+            .eq("location", sel_site)
+            .not_.is_("check_out", "null")
+            .order("date", descending=True)
+            .execute()
+        )
+        compliance_data = compliance_res.data
+    except Exception as e:
+        st.error(f"Failed to fetch compliance logs: {e}")
+        compliance_data = []
+
+    if not compliance_data:
+        st.info(f"No completed checkout logs available for {sel_site} to display.")
+    else:
+        # Convert database response into a Pandas Dataframe
+        df = pd.DataFrame(compliance_data)
+
+        # Ensure calculated_hours handles missing values cleanly
+        df["calculated_hours"] = df["calculated_hours"].fillna(0).astype(int)
+
+        # 1. Summary Metric Visual Anchor
+        total_hours_sum = int(df["calculated_hours"].sum())
+        
+        col_metric, _ = st.columns([1, 2])
+        with col_metric:
+            st.metric(
+                label="⏳ Total Rounded NCS Hours (Site)", 
+                value=f"{total_hours_sum} hrs",
+                help="Sum of all rounded-up operational hours claimed for this site location."
+            )
+
+        st.write("---")
+        st.subheader("📋 NCS Attendance & Claim Log")
+        
+        # Clean up column headers for user presentation
+        df_clean = df.rename(columns={
+            "date": "Date",
+            "name": "Child Name",
+            "session_type": "Session",
+            "check_in": "Sign-In Time",
+            "check_out": "Sign-Out Time",
+            "collected_by": "Collected By",
+            "calculated_hours": "NCS Claim Hours (Rounded)"
+        })
+
+        # 2. Render Interactive Data Table
+        st.dataframe(
+            df_clean, 
+            use_container_width=True,
+            column_order=["Date", "Child Name", "Session", "Sign-In Time", "Sign-Out Time", "Collected By", "NCS Claim Hours (Rounded)"]
+        )
+
+        # 3. CSV Export feature for department compliance audits
+        csv_buffer = io.StringIO()
+        df_clean.to_csv(csv_buffer, index=False)
+        csv_bytes = csv_buffer.getvalue().encode('utf-8')
+
+        st.download_button(
+            label="📥 Export Compliance Logs to CSV",
+            data=csv_bytes,
+            file_name=f"ncs_compliance_{sel_site.lower()}_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
