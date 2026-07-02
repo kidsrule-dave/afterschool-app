@@ -301,7 +301,8 @@ elif page == "NCS Compliance":
         df["calculated_hours"] = df["calculated_hours"].fillna(0).astype(int)
         total_hours_sum = int(df["calculated_hours"].sum())
         
-        col_metric, _ = st.columns()
+        # FIXED: Explicitly defined columns configuration layout parameter
+        col_metric, col_spacer = st.columns([1, 2])
         with col_metric:
             st.metric(label="⏳ Total Rounded NCS Hours (Site)", value=f"{total_hours_sum} hrs")
             
