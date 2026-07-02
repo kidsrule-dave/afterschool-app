@@ -329,8 +329,8 @@ elif page == "Attendance":
 
 # --- 8. NCS COMPLIANCE ---
 elif page == "NCS Compliance":
-    st.title("📊 NCS Compliance Dashboard")
-    st.caption(f"Reviewing calculated attendance hours for compliance mapping at {sel_site}.")
+    st.title("📊 NCS Compliance Reporting Hub")
+    st.caption(f"Audit-ready statutory compliance intelligence engine for **{sel_site}**.")
     
     try:
         compliance_res = (
@@ -347,49 +347,93 @@ elif page == "NCS Compliance":
         compliance_data = []
         
     if not compliance_data:
-        st.info(f"No completed checkout logs available for {sel_site} to display.")
+        st.info(f"No completed checkout logs available for {sel_site} to compile compliance metrics.")
     else:
         df = pd.DataFrame(compliance_data)
         df["calculated_hours"] = df["calculated_hours"].fillna(0).astype(int)
-        total_hours_sum = int(df["calculated_hours"].sum())
         
-        # FIXED: Explicitly defined columns configuration layout parameter
-        col_metric, col_spacer = st.columns([1, 2])
+        # --- GLOBAL SUMMARY STATS WIDGET ---
+        total_hours_sum = int(df["calculated_hours"].sum())
+        col_metric, _ = st.columns([1, 2])
         with col_metric:
-            st.metric(label="⏳ Total Rounded NCS Hours (Site)", value=f"{total_hours_sum} hrs")
+            st.metric(label="⏳ Total Rounded NCS Hours (All Time)", value=f"{total_hours_sum} hrs")
             
         st.write("---")
-        st.subheader("📋 NCS Attendance & Claim Log")
         
-        df_clean = df.rename(columns={
-            "date": "Date",
-            "name": "Child Name",
-            "session_type": "Session",
-            "check_in": "Sign-In Time",
-            "check_out": "Sign-Out Time",
-            "collected_by": "Collected By",
-            "calculated_hours": "NCS Claim Hours (Rounded)"
-        })
+        # --- THE 4 SPECIFIC COMPLIANCE REPORTS TABS ---
+        rep_tab1, rep_tab2, rep_tab3, rep_tab4 = st.tabs([
+            "📋 1. Master Roster Overview", 
+            "👦 2. Hours Claim Summary", 
+            "🌅 3. Session Breakdown Audit", 
+            "🔑 4. Collector Verification Log"
+        ])
         
-        st.dataframe(
-            df_clean,
-            use_container_width=True,
-            column_order=["Date", "Child Name", "Session", "Sign-In Time", "Sign-Out Time", "Collected By", "NCS Claim Hours (Rounded)"]
-        )
-        
-        # Fixed: Verified all string conversion and string format brackets close safely
-        csv_buffer = io.StringIO()
-        df_clean.to_csv(csv_buffer, index=False)
-        csv_bytes = csv_buffer.getvalue().encode('utf-8')
-        
-        # Cleaned up download button configuration layout
-        st.download_button(
-            label="📥 Export Compliance Logs to CSV",
-            data=csv_bytes,
-            file_name=f"ncs_compliance_{sel_site.lower()}_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
+        # ----------------------------------------------------
+        # REPORT 1: MASTER ROSTER OVERVIEW
+        # ----------------------------------------------------
+        with rep_tab1:
+            st.subheader("📋 Master Compliance Roster Overview")
+            st.caption("Complete historical timeline data grid showing all finalized attendance records.")
+            
+            df_r1 = df.rename(columns={
+                "date": "Date", "name": "Child Name", "session_type": "Session",
+                "check_in": "Sign-In", "check_out": "Sign-Out", 
+                "collected_by": "Collected By", "calculated_hours": "Claimed Hours"
+            })
+            
+            st.dataframe(df_r1, use_container_width=True)
+            
+            csv_r1 = df_r1.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Master Overview (CSV)", data=csv_r1, file_name=f"ncs_master_{sel_site.lower()}.csv", mime="text/csv", key="dl_r1")
+
+        # ----------------------------------------------------
+        # REPORT 2: HOURS CLAIM SUMMARY
+        # ----------------------------------------------------
+        with rep_tab2:
+            st.subheader("👦 Student Hours Claim Summary")
+            st.caption("Aggregated total NCS rounded operational hours claimed per individual child.")
+            
+            # Grouping data to count totals per child
+            df_r2 = df.groupby("name")["calculated_hours"].agg(["sum", "count", "mean"]).reset_index()
+            df_r2.columns = ["Child Name", "Total Claimed Hours", "Total Days Attended", "Avg Hours / Day"]
+            df_r2["Avg Hours / Day"] = df_r2["Avg Hours / Day"].round(1)
+            df_r2 = df_r2.sort_values(by="Total Claimed Hours", ascending=False)
+            
+            st.dataframe(df_r2, use_container_width=True)
+            
+            csv_r2 = df_r2.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Hours Summary (CSV)", data=csv_r2, file_name=f"ncs_summary_{sel_site.lower()}.csv", mime="text/csv", key="dl_r2")
+
+        # ----------------------------------------------------
+        # REPORT 3: SESSION BREAKDOWN AUDIT
+        # ----------------------------------------------------
+        with rep_tab3:
+            st.subheader("🌅 Club & Session Type Breakdown")
+            st.caption("Comparative analysis metrics dividing hours across Breakfast Club and Afterschool tracks.")
+            
+            df_r3 = df.groupby("session_type")["calculated_hours"].agg(["sum", "count"]).reset_index()
+            df_r3.columns = ["Session Type", "Total Accumulated Hours", "Total Student Checkouts"]
+            
+            st.dataframe(df_r3, use_container_width=True)
+            
+            csv_r3 = df_r3.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Session Breakdown (CSV)", data=csv_r3, file_name=f"ncs_sessions_{sel_site.lower()}.csv", mime="text/csv", key="dl_r3")
+
+        # ----------------------------------------------------
+        # REPORT 4: COLLECTOR VERIFICATION AUDIT
+        # ----------------------------------------------------
+        with rep_tab4:
+            st.subheader("🔑 Collector Authorization Verification Log")
+            st.caption("Security registry pairing historical sign-out timestamps directly with the designated collector identity.")
+            
+            df_r4 = df[["date", "name", "check_out", "collected_by"]].copy()
+            df_r4.columns = ["Date", "Child Name", "Sign-Out Time", "Collector Identity Given"]
+            df_r4 = df_r4.sort_values(by="Date", ascending=False)
+            
+            st.dataframe(df_r4, use_container_width=True)
+            
+            csv_r4 = df_r4.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Collector Log (CSV)", data=csv_r4, file_name=f"ncs_collectors_{sel_site.lower()}.csv", mime="text/csv", key="dl_r4")
 # --- 9. ADMIN SETTINGS ---
 elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
