@@ -226,8 +226,10 @@ elif page == "Admin Settings":
             p3_n = st.text_input("Slot 3 - Full Name")
         with col2:
             p1_p = st.text_input("Slot 1 - Contact Phone")
-              p2_p = st.text_input("Slot 2 - Contact Phone")
-        p3_p = st.text_input("Slot 3 - Contact Phone")
+            p2_p = st.text_input("Slot 2 - Contact Phone")
+            p3_p = st.text_input("Slot 3 - Contact Phone")
+            
+        submitted_child = st.form_submit_button("Register Child into System")
             
         submitted_child = st.form_submit_button("Register Child into System")
         
