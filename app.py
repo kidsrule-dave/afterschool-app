@@ -230,8 +230,6 @@ elif page == "Admin Settings":
             p3_p = st.text_input("Slot 3 - Contact Phone")
             
         submitted_child = st.form_submit_button("Register Child into System")
-            
-        submitted_child = st.form_submit_button("Register Child into System")
         
         if submitted_child:
             if new_name and em_name and em_phone:
@@ -253,10 +251,6 @@ elif page == "Admin Settings":
                     st.error(f"Failed to add child profile: {e}")
             else:
                 st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
-
-else:
-    st.title(f"📄 {page}")
-    st.info("Placeholder configuration panel layout.")
 # --- 7. ATTENDANCE & SIGN-IN ---
 elif page == "Attendance":
     st.title("📍 Daily Log")
