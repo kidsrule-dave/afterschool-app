@@ -360,7 +360,7 @@ elif page == "NCS Compliance":
         
         # --- GLOBAL SUMMARY STATS WIDGET ---
         total_hours_sum = int(df["calculated_hours"].sum())
-        col_metric, _ = st.columns()
+        col_metric, _ = st.columns(2)
         with col_metric:
             st.metric(label="⏳ Total Rounded NCS Hours (All Time)", value=f"{total_hours_sum} hrs")
             
