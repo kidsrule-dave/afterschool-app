@@ -324,10 +324,12 @@ elif page == "NCS Compliance":
             column_order=["Date", "Child Name", "Session", "Sign-In Time", "Sign-Out Time", "Collected By", "NCS Claim Hours (Rounded)"]
         )
         
+        # Fixed: Verified all string conversion and string format brackets close safely
         csv_buffer = io.StringIO()
         df_clean.to_csv(csv_buffer, index=False)
         csv_bytes = csv_buffer.getvalue().encode('utf-8')
         
+        # Cleaned up download button configuration layout
         st.download_button(
             label="📥 Export Compliance Logs to CSV",
             data=csv_bytes,
@@ -335,67 +337,6 @@ elif page == "NCS Compliance":
             mime="text/csv",
             use_container_width=True
         )
-# --- 8. NCS COMPLIANCE ---
-elif page == "NCS Compliance":
-    st.title("📊 NCS Compliance Dashboard")
-    st.caption(f"Reviewing calculated attendance hours for compliance mapping at {sel_site}.")
-    
-    try:
-        # Changed .order("date", descending=True) to .order("date", desc=True)
-        compliance_res = (
-            supabase.table("attendance")
-            .select("date", "name", "session_type", "check_in", "check_out", "collected_by", "calculated_hours")
-            .eq("location", sel_site)
-            .not_.is_("check_out", "null")
-            .order("date", desc=True)
-            .execute()
-        )
-        compliance_data = compliance_res.data
-    except Exception as e:
-        st.error(f"Failed to fetch compliance logs: {e}")
-        compliance_data = []
-        
-    if not compliance_data:
-        st.info(f"No completed checkout logs available for {sel_site} to display.")
-    else:
-        df = pd.DataFrame(compliance_data)
-        df["calculated_hours"] = df["calculated_hours"].fillna(0).astype(int)
-        total_hours_sum = int(df["calculated_hours"].sum())
-        
-        col_metric, _ = st.columns()
-        with col_metric:
-            st.metric(label="⏳ Total Rounded NCS Hours (Site)", value=f"{total_hours_sum} hrs")
-            
-        st.write("---")
-        st.subheader("📋 NCS Attendance & Claim Log")
-        
-        df_clean = df.rename(columns={
-            "date": "Date",
-            "name": "Child Name",
-            "session_type": "Session",
-            "check_in": "Sign-In Time",
-            "check_out": "Sign-Out Time",
-            "collected_by": "Collected By",
-            "calculated_hours": "NCS Claim Hours (Rounded)"
-        })
-        
-        st.dataframe(
-            df_clean,
-            use_container_width=True,
-            column_order=["Date", "Child Name", "Session", "Sign-In Time", "Sign-Out Time", "Collected By", "NCS Claim Hours (Rounded)"]
-        )
-        
-        csv_buffer = io.StringIO()
-        df_clean.to_csv(csv_buffer, index=False)
-        csv_bytes = csv_buffer.getvalue().encode('utf-8')
-        
-        st.download_button(
-            label="📥 Export Compliance Logs to CSV",
-            data=csv_bytes,
-            file_name=f"ncs_compliance_{sel_site.lower()}_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            use_container_width=True
-
 # --- 9. ADMIN SETTINGS ---
 elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
