@@ -117,12 +117,12 @@ elif page == "Weekly Planner":
                     st.error(f"Failed to submit database entries: {e}")
 
 # --- 6. QUICK-TAP BOARD ---
+# --- 6. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Sign-Out")
     st.caption("Tap a child's name to select who is collecting them.")
     
     try:
-        # Pulled custom pickup columns from Supabase schema
         children_res = supabase.table("children").select(
             "name", "emergency_name", "emergency_phone",
             "pickup_1_name", "pickup_1_phone",
@@ -174,7 +174,6 @@ elif page == "Quick-Tap Board":
                 e_name = meta.get('emergency_name', 'Not Listed')
                 e_phone = meta.get('emergency_phone', 'Not Listed')
                 
-                # Fetch custom entries or assign default values
                 p1_name = meta.get('pickup_1_name') or "Mom"
                 p1_phone = meta.get('pickup_1_phone') or ""
                 p2_name = meta.get('pickup_2_name') or "Slot 2 (Empty)"
@@ -189,7 +188,6 @@ elif page == "Quick-Tap Board":
                     st.write("---")
                     st.write("**Who is collecting them?**")
                     
-                    # Dynamically build buttons out of custom slots
                     custom_collectors = [
                         f"👩 {p1_name} ({p1_phone})",
                         f"👤 {p2_name} ({p2_phone})",
@@ -202,8 +200,51 @@ elif page == "Quick-Tap Board":
                         if coll_cols[i].button(p, key=f"q_tap_p_{i}_{active_id}", type=p_style, use_container_width=True):
                             st.session_state[c_key] = p
                             st.rerun()
+                    
+                    # --- RESTORED CONFIRM SIGN OUT SECTION ---
+                    if current_collector:
+                        st.success(f"Selected Collector: **{current_collector}**")
+                        
+                        st.write("✍️ **Collector's Signature:**")
+                        canvas_result = st_canvas(
+                            fill_color="rgba(255, 165, 0, 0.3)",
+                            stroke_width=3,
+                            stroke_color="#000000",
+                            background_color="#eeeeee",
+                            height=150,
+                            key=f"canvas_{active_id}",
+                            update_streamlit=True
+                        )
+                        
+                        # Form to submit the checkout details back to Supabase
+                        with st.form(f"checkout_form_{active_id}"):
+                            st.caption("Please sign above before confirming.")
+                            confirm_btn = st.form_submit_button("Confirm Child Sign-Out", type="primary", use_container_width=True)
                             
-                    # Optional canvas signature and submission logic could follow here...
+                            if confirm_btn:
+                                now_time = datetime.now().strftime("%H:%M:%S")
+                                calculated_hours = ncs_round(selected_log['check_in'], now_time)
+                                
+                                try:
+                                    supabase.table("attendance").update({
+                                        "check_out": now_time,
+                                        "collected_by": current_collector,
+                                        "calculated_hours": calculated_hours
+                                    }).eq("id", active_id).execute()
+                                    
+                                    st.success(f"🎒 {selected_log['name']} successfully signed out at {now_time}!")
+                                    
+                                    # Clear state variables
+                                    if active_child_key in st.session_state:
+                                        del st.session_state[active_child_key]
+                                    if c_key in st.session_state:
+                                        del st.session_state[c_key]
+                                        
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Failed to submit sign-out: {e}")
+                    else:
+                        st.info("💡 Please tap one of the names above to select the collector.")
 
 # --- 7. ADMIN SETTINGS ---
 elif page == "Admin Settings":
