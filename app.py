@@ -242,24 +242,24 @@ elif page == "Quick-Tap Board":
                                     st.error(f"Failed to submit sign-out: {e}")
                     else:
                         st.info("💡 Please tap one of the names above to select the collector.")
-
+# --- 7. ATTENDANCE ---
 elif page == "Attendance":
     st.title("📋 Live Site Attendance Feed")
     st.caption(f"Showing all historical and active daily logs registered for {sel_site}.")
     
     try:
-        all_logs_res = supabase.table("attendance").select("*").eq("location", sel_site).order("date", descending=True).execute()
+        # Changed .order("date", descending=True) to .order("date", desc=True)
+        all_logs_res = supabase.table("attendance").select("*").eq("location", sel_site).order("date", desc=True).execute()
         logs_data = all_logs_res.data
     except Exception as e:
         st.error(f"Failed to load attendance logs: {e}")
         logs_data = []
-
+        
     if not logs_data:
         st.info(f"No attendance logs have been recorded for {sel_site} yet.")
     else:
         df_logs = pd.DataFrame(logs_data)
         
-        # Clean columns structure for presentation
         df_logs_display = df_logs.rename(columns={
             "date": "Date",
             "name": "Child Name",
@@ -270,24 +270,23 @@ elif page == "Attendance":
             "calculated_hours": "NCS Hours"
         })
         
-        # Display data grid
         st.dataframe(
             df_logs_display,
             use_container_width=True,
             column_order=["Date", "Child Name", "Session Type", "Sign-In", "Sign-Out", "Collected By", "NCS Hours"]
-        )
 # --- 8. NCS COMPLIANCE ---
 elif page == "NCS Compliance":
     st.title("📊 NCS Compliance Dashboard")
     st.caption(f"Reviewing calculated attendance hours for compliance mapping at {sel_site}.")
     
     try:
+        # Changed .order("date", descending=True) to .order("date", desc=True)
         compliance_res = (
             supabase.table("attendance")
             .select("date", "name", "session_type", "check_in", "check_out", "collected_by", "calculated_hours")
             .eq("location", sel_site)
             .not_.is_("check_out", "null")
-            .order("date", descending=True)
+            .order("date", desc=True)
             .execute()
         )
         compliance_data = compliance_res.data
@@ -335,7 +334,6 @@ elif page == "NCS Compliance":
             file_name=f"ncs_compliance_{sel_site.lower()}_{datetime.now().strftime('%Y%m%d')}.csv",
             mime="text/csv",
             use_container_width=True
-        )
 
 # --- 9. ADMIN SETTINGS ---
 elif page == "Admin Settings":
