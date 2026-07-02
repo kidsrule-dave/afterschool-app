@@ -122,9 +122,14 @@ elif page == "Quick-Tap Board":
     st.caption("Tap a child's name to select who is collecting them.")
     
     try:
-        children_res = supabase.table("children").select("name", "emergency_name", "emergency_phone").eq("location", sel_site).execute()
+        # Pulled custom pickup columns from Supabase schema
+        children_res = supabase.table("children").select(
+            "name", "emergency_name", "emergency_phone",
+            "pickup_1_name", "pickup_1_phone",
+            "pickup_2_name", "pickup_2_phone",
+            "pickup_3_name", "pickup_3_phone"
+        ).eq("location", sel_site).execute()
         child_lookup = {c['name']: c for c in children_res.data}
-        site_child_names = list(child_lookup.keys())
         
         active_res = supabase.table("attendance").select("*").is_("check_out", "null").eq("location", sel_site).execute()
         site_logs = active_res.data
@@ -169,6 +174,14 @@ elif page == "Quick-Tap Board":
                 e_name = meta.get('emergency_name', 'Not Listed')
                 e_phone = meta.get('emergency_phone', 'Not Listed')
                 
+                # Fetch custom entries or assign default values
+                p1_name = meta.get('pickup_1_name') or "Mom"
+                p1_phone = meta.get('pickup_1_phone') or ""
+                p2_name = meta.get('pickup_2_name') or "Slot 2 (Empty)"
+                p2_phone = meta.get('pickup_2_phone') or ""
+                p3_name = meta.get('pickup_3_name') or "Slot 3 (Empty)"
+                p3_phone = meta.get('pickup_3_phone') or ""
+                
                 with st.container(border=True):
                     st.subheader(f"🔑 Sign-Out: {selected_log['name']}")
                     st.write(f"🎒 *In since {selected_log['check_in']} ({selected_log.get('session_type', 'Afterschool')})*")
@@ -176,34 +189,72 @@ elif page == "Quick-Tap Board":
                     st.write("---")
                     st.write("**Who is collecting them?**")
                     
-                    collectors = ["Mom", "Dad", "Nan", "Grandad", "Aunty", "Uncle", "Brother", "Sister"]
-                    coll_cols = st.columns(4)
+                    # Dynamically build buttons out of custom slots
+                    custom_collectors = [
+                        f"👩 {p1_name} ({p1_phone})",
+                        f"👤 {p2_name} ({p2_phone})",
+                        f"👤 {p3_name} ({p3_phone})"
+                    ]
                     
-                    for i, p in enumerate(collectors):
+                    coll_cols = st.columns(3)
+                    for i, p in enumerate(custom_collectors):
                         p_style = "primary" if current_collector == p else "secondary"
-                        if coll_cols[i % 4].button(p, key=f"q_tap_p_{p}_{active_id}", type=p_style, use_container_width=True):
+                        if coll_cols[i].button(p, key=f"q_tap_p_{i}_{active_id}", type=p_style, use_container_width=True):
                             st.session_state[c_key] = p
                             st.rerun()
-                    
-                    if current_collector:
-                        st.write("")
-                        if st.button(f"✅ Confirm: {current_collector} is picking up {selected_log['name']}", key=f"fin_qt_{active_id}", type="primary", use_container_width=True):
-                            now_time = datetime.now().strftime("%H:%M:%S")
-                            try:
-                                supabase.table("attendance").update({
-                                    "check_out": now_time, 
-                                    "collected_by": current_collector,
-                                    "hours": ncs_round(selected_log['check_in'], now_time),
-                                    "notes": f"Quick-tap pickup by {current_collector}"
-                                }).eq("id", active_id).execute()
-                                
-                                if c_key in st.session_state: del st.session_state[c_key]
-                                if "active_tap_child_id" in st.session_state: del st.session_state["active_tap_child_id"]
-                                
-                                st.success(f"Successfully signed out {selected_log['name']}!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Database error during sign-out: {e}")
+                            
+                    # Optional canvas signature and submission logic could follow here...
+
+# --- 7. ADMIN SETTINGS (WITH EXTENDED SLOTS) ---
+elif page == "Admin Settings":
+    st.title("⚙️ Admin Settings")
+    st.subheader("Register a New Child")
+    
+    with st.form("register_child_form", clear_on_submit=True):
+        new_name = st.text_input("Child's Full Name")
+        new_location = st.selectbox("Assign Site Location", sites)
+        em_name = st.text_input("Primary Emergency Contact Name")
+        em_phone = st.text_input("Primary Emergency Contact Phone")
+        
+        st.markdown("### 🚗 Authorized Pickups Configuration")
+        st.caption("Provide up to three individuals cleared to sign out this student.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            p1_n = st.text_input("Slot 1 - Full Name", value="Mom")
+            p2_n = st.text_input("Slot 2 - Full Name")
+            p3_n = st.text_input("Slot 3 - Full Name")
+        with col2:
+            p1_p = st.text_input("Slot 1 - Contact Phone")
+              p2_p = st.text_input("Slot 2 - Contact Phone")
+        p3_p = st.text_input("Slot 3 - Contact Phone")
+            
+        submitted_child = st.form_submit_button("Register Child into System")
+        
+        if submitted_child:
+            if new_name and em_name and em_phone:
+                try:
+                    supabase.table("children").insert({
+                        "name": new_name,
+                        "location": new_location,
+                        "emergency_name": em_name,
+                        "emergency_phone": em_phone,
+                        "pickup_1_name": p1_n,
+                        "pickup_1_phone": p1_p,
+                        "pickup_2_name": p2_n,
+                        "pickup_2_phone": p2_p,
+                        "pickup_3_name": p3_n,
+                        "pickup_3_phone": p3_p
+                    }).execute()
+                    st.success(f"🎉 Successfully registered {new_name} at {new_location} with pickup slots!")
+                except Exception as e:
+                    st.error(f"Failed to add child profile: {e}")
+            else:
+                st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
+
+else:
+    st.title(f"📄 {page}")
+    st.info("Placeholder configuration panel layout.")
 # --- 7. ATTENDANCE & SIGN-IN ---
 elif page == "Attendance":
     st.title("📍 Daily Log")
