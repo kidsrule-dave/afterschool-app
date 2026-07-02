@@ -245,8 +245,60 @@ elif page == "Quick-Tap Board":
 # --- 7. ATTENDANCE ---
 elif page == "Attendance":
     st.title("📋 Live Site Attendance Feed")
-    st.caption(f"Showing all historical and active daily logs registered for {sel_site}.")
+    st.caption(f"Quickly check children in or review daily logs for **{sel_site}**.")
     
+    # --- 1. QUICK BUTTON-TAP SIGN-IN FEED ---
+    st.subheader("🌅 Quick Sign-In Panel")
+    st.caption("Tap a child's name to instantly log their arrival for today.")
+    
+    today_str = str(datetime.now().date())
+    now_time_str = datetime.now().strftime("%H:%M:%S")
+
+    try:
+        # Fetch all children registered to this specific site location
+        all_kids_res = supabase.table("children").select("name").eq("location", sel_site).execute()
+        registered_kids = sorted([k['name'] for k in all_kids_res.data])
+        
+        # Fetch children who are ALREADY checked in today (check_out is null)
+        already_in_res = supabase.table("attendance").select("name").eq("location", sel_site).eq("date", today_str).is_("check_out", "null").execute()
+        checked_in_names = [a['name'] for a in already_in_res.data]
+    except Exception as e:
+        st.error(f"Error compiling child list data matrix: {e}")
+        registered_kids = []
+        checked_in_names = []
+
+    # Filter out kids who are already present so we only show who is missing
+    available_to_signin = [name for name in registered_kids if name not in checked_in_names]
+
+    if not available_to_signin:
+        st.info("🎒 All registered children for this site location are currently checked in.")
+    else:
+        # Choose Session Type for the tap action
+        session_choice = st.radio("Select Session Type for Tap Sign-In:", ["Afterschool", "Breakfast Club"], horizontal=True)
+        
+        # Generate clean 3-column button grid array layout layout
+        kid_cols = st.columns(3)
+        for idx, kid_name in enumerate(available_to_signin):
+            with kid_cols[idx % 3]:
+                if st.button(f"➕ {kid_name}", key=f"signin_btn_{idx}_{kid_name}", use_container_width=True):
+                    try:
+                        supabase.table("attendance").insert({
+                            "name": kid_name,
+                            "location": sel_site,
+                            "session_type": session_choice,
+                            "date": today_str,
+                            "check_in": now_time_str,
+                            "check_out": None  # Leaves open for Quick-Tap Board checkout
+                        }).execute()
+                        st.success(f"🎉 Checked in {kid_name} successfully!")
+                        st.rerun()
+                    except Exception as db_err:
+                        st.error(f"Failed to check in: {db_err}")
+
+    st.write("---")
+    
+    # --- 2. RENDER HISTORICAL ATTENDANCE FEED ---
+    st.subheader("📜 Attendance History Log")
     try:
         all_logs_res = supabase.table("attendance").select("*").eq("location", sel_site).order("date", desc=True).execute()
         logs_data = all_logs_res.data
