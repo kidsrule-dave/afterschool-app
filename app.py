@@ -245,14 +245,44 @@ elif page == "Quick-Tap Board":
 
 # --- 7. ATTENDANCE ---
 elif page == "Attendance":
-    st.title("📋 Attendance Tracking")
-    st.info("Historical or manual check-in adjustment logs workspace.")
+    st.title("📋 Live Site Attendance Feed")
+    st.caption(f"Showing all historical and active daily logs registered for {sel_site}.")
+    
+    try:
+        all_logs_res = supabase.table("attendance").select("*").eq("location", sel_site).order("date", descending=True).execute()
+        logs_data = all_logs_res.data
+    except Exception as e:
+        st.error(f"Failed to load attendance logs: {e}")
+        logs_data = []
+        
+    if not logs_data:
+        st.info(f"No attendance logs have been recorded for {sel_site} yet.")
+    else:
+        df_logs = pd.DataFrame(logs_data)
+        
+        # Clean columns structure for presentation
+        df_logs_display = df_logs.rename(columns={
+            "date": "Date",
+            "name": "Child Name",
+            "session_type": "Session Type",
+            "check_in": "Sign-In",
+            "check_out": "Sign-Out",
+            "collected_by": "Collected By",
+            "calculated_hours": "NCS Hours"
+        })
+        
+        # Display data grid
+        st.dataframe(
+            df_logs_display,
+            use_container_width=True,
+            column_order=["Date", "Child Name", "Session Type", "Sign-In", "Sign-Out", "Collected By", "NCS Hours"]
+        )
 
 # --- 8. NCS COMPLIANCE ---
 elif page == "NCS Compliance":
     st.title("📊 NCS Compliance Dashboard")
-    st.caption(f"Reviewing calculated attendance hours for compliance mapping at **{sel_site}**.")
-
+    st.caption(f"Reviewing calculated attendance hours for compliance mapping at {sel_site}.")
+    
     try:
         compliance_res = (
             supabase.table("attendance")
@@ -266,7 +296,7 @@ elif page == "NCS Compliance":
     except Exception as e:
         st.error(f"Failed to fetch compliance logs: {e}")
         compliance_data = []
-
+        
     if not compliance_data:
         st.info(f"No completed checkout logs available for {sel_site} to display.")
     else:
@@ -277,7 +307,7 @@ elif page == "NCS Compliance":
         col_metric, _ = st.columns()
         with col_metric:
             st.metric(label="⏳ Total Rounded NCS Hours (Site)", value=f"{total_hours_sum} hrs")
-
+            
         st.write("---")
         st.subheader("📋 NCS Attendance & Claim Log")
         
@@ -290,17 +320,17 @@ elif page == "NCS Compliance":
             "collected_by": "Collected By",
             "calculated_hours": "NCS Claim Hours (Rounded)"
         })
-
+        
         st.dataframe(
-            df_clean, 
+            df_clean,
             use_container_width=True,
             column_order=["Date", "Child Name", "Session", "Sign-In Time", "Sign-Out Time", "Collected By", "NCS Claim Hours (Rounded)"]
         )
-
+        
         csv_buffer = io.StringIO()
         df_clean.to_csv(csv_buffer, index=False)
         csv_bytes = csv_buffer.getvalue().encode('utf-8')
-
+        
         st.download_button(
             label="📥 Export Compliance Logs to CSV",
             data=csv_bytes,
@@ -364,14 +394,14 @@ elif page == "Admin Settings":
     st.markdown("---")
     st.subheader("🗑️ Remove a Child from System")
     st.caption(f"Select a child registered at {sel_site} to remove their profile.")
-
+    
     try:
         kids_to_delete_res = supabase.table("children").select("name").eq("location", sel_site).execute()
         delete_roster = sorted([k['name'] for k in kids_to_delete_res.data])
     except Exception as e:
         st.error(f"Error loading deletion roster: {e}")
         delete_roster = []
-
+        
     if not delete_roster:
         st.info(f"No children currently registered at {sel_site} to delete.")
     else:
@@ -395,4 +425,3 @@ elif page == "Admin Settings":
 # --- 10. GLOBAL FALLBACK ---
 else:
     st.title(f"📄 {page}")
-    st.info("Placeholder configuration panel layout.")
