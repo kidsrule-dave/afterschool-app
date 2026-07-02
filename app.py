@@ -5,6 +5,7 @@ import io
 from datetime import datetime
 from supabase import create_client, Client
 from streamlit_drawable_canvas import st_canvas
+
 # ADD THE LOGO HERE - It will sit at the very top of your sidebar
 st.sidebar.image("kidsrule-logo.png", use_container_width=True)
 
@@ -219,13 +220,105 @@ elif page == "Quick-Tap Board":
                             confirm_btn = st.form_submit_button("Confirm Child Sign-Out", type="primary", use_container_width=True)
                             
                             if confirm_btn:
-                    ]
-                      # --- 9. ADMIN SETTINGS (FORM WITH FIXED INDENTATION) ---
+Use code with caution.
+                                now_time = datetime.now().strftime("%H:%M:%S")
+                                calculated_hours = ncs_round(selected_log['check_in'], now_time)
+                                
+                                try:
+                                    supabase.table("attendance").update({
+                                        "check_out": now_time,
+                                        "collected_by": current_collector,
+                                        "calculated_hours": calculated_hours
+                                    }).eq("id", active_id).execute()
+                                    
+                                    st.success(f"🎒 {selected_log['name']} successfully signed out at {now_time}!")
+                                    
+                                    if active_child_key in st.session_state:
+                                        del st.session_state[active_child_key]
+                                    if c_key in st.session_state:
+                                        del st.session_state[c_key]
+                                        
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Failed to submit sign-out: {e}")
+                    else:
+                        st.info("💡 Please tap one of the names above to select the collector.")
+
+# --- 7. ATTENDANCE ---
+elif page == "Attendance":
+    st.title("📋 Attendance Tracking")
+    st.info("Historical or manual check-in adjustment logs workspace.")
+
+# --- 8. NCS COMPLIANCE ---
+elif page == "NCS Compliance":
+    st.title("📊 NCS Compliance Dashboard")
+    st.caption(f"Reviewing calculated attendance hours for compliance mapping at **{sel_site}**.")
+
+    try:
+        compliance_res = (
+            supabase.table("attendance")
+            .select("date", "name", "session_type", "check_in", "check_out", "collected_by", "calculated_hours")
+            .eq("location", sel_site)
+            .not_.is_("check_out", "null")
+            .order("date", descending=True)
+            .execute()
+        )
+        compliance_data = compliance_res.data
+    except Exception as e:
+        st.error(f"Failed to fetch compliance logs: {e}")
+        compliance_data = []
+
+    if not compliance_data:
+        st.info(f"No completed checkout logs available for {sel_site} to display.")
+    else:
+        df = pd.DataFrame(compliance_data)
+        df["calculated_hours"] = df["calculated_hours"].fillna(0).astype(int)
+        total_hours_sum = int(df["calculated_hours"].sum())
+        
+        col_metric, _ = st.columns()
+        with col_metric:
+            st.metric(label="⏳ Total Rounded NCS Hours (Site)", value=f"{total_hours_sum} hrs")
+
+        st.write("---")
+        st.subheader("📋 NCS Attendance & Claim Log")
+        
+        df_clean = df.rename(columns={
+            "date": "Date",
+            "name": "Child Name",
+            "session_type": "Session",
+            "check_in": "Sign-In Time",
+            "check_out": "Sign-Out Time",
+            "collected_by": "Collected By",
+            "calculated_hours": "NCS Claim Hours (Rounded)"
+        })
+
+        st.dataframe(
+            df_clean, 
+            use_container_width=True,
+            column_order=["Date", "Child Name", "Session", "Sign-In Time", "Sign-Out Time", "Collected By", "NCS Claim Hours (Rounded)"]
+        )
+
+        csv_buffer = io.StringIO()
+        df_clean.to_csv(csv_buffer, index=False)
+        csv_bytes = csv_buffer.getvalue().encode('utf-8')
+
+        st.download_button(
+            label="📥 Export Compliance Logs to CSV",
+            data=csv_bytes,
+            file_name=f"ncs_compliance_{sel_site.lower()}_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+# --- 9. ADMIN SETTINGS ---
+elif page == "Admin Settings":
+    st.title("⚙️ Admin Settings")
+    st.subheader("Register a New Child")
+    
     with st.form("register_child_form", clear_on_submit=True):
         new_name = st.text_input("Child's Full Name")
         new_location = st.selectbox("Assign Site Location", sites)
         
-        # NCS Chit input space
         ncs_chit = st.text_input("NCS CHIT / CHN Number (Optional)", placeholder="e.g., CHN1234567")
         em_name = st.text_input("Primary Emergency Contact Name")
         em_phone = st.text_input("Primary Emergency Contact Phone")
@@ -272,14 +365,14 @@ elif page == "Quick-Tap Board":
     st.markdown("---")
     st.subheader("🗑️ Remove a Child from System")
     st.caption(f"Select a child registered at {sel_site} to remove their profile.")
-    
+
     try:
         kids_to_delete_res = supabase.table("children").select("name").eq("location", sel_site).execute()
         delete_roster = sorted([k['name'] for k in kids_to_delete_res.data])
     except Exception as e:
         st.error(f"Error loading deletion roster: {e}")
         delete_roster = []
-        
+
     if not delete_roster:
         st.info(f"No children currently registered at {sel_site} to delete.")
     else:
@@ -299,5 +392,8 @@ elif page == "Quick-Tap Board":
                         st.error(f"Failed to delete record: {e}")
                 else:
                     st.error("Please check the confirmation box before attempting to delete.")
-                    
-   
+
+# --- 10. GLOBAL FALLBACK ---
+else:
+    st.title(f"📄 {page}")
+    st.info("Placeholder configuration panel layout.")
