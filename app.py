@@ -205,17 +205,11 @@ elif page == "Quick-Tap Board":
                             
                     # Optional canvas signature and submission logic could follow here...
 
-# --- 7. ADMIN SETTINGS (WITH EXTENDED SLOTS) ---
-elif page == "Admin Settings":
-    st.title("⚙️ Admin Settings")
-    st.subheader("Register a New Child")
-    
 # --- 7. ADMIN SETTINGS ---
 elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
     st.subheader("Register a New Child")
     
-    # This line needs exactly 4 spaces of indentation
     with st.form("register_child_form", clear_on_submit=True):
         new_name = st.text_input("Child's Full Name")
         new_location = st.selectbox("Assign Site Location", sites)
@@ -263,13 +257,13 @@ elif page == "Admin Settings":
                     st.error(f"Failed to add child profile: {e}")
             else:
                 st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
-                # --- DELETE A CHILD SECTION ---
+
+    # --- 7B. REMOVE A CHILD SECTION ---
     st.markdown("---")
     st.subheader("🗑️ Remove a Child from System")
     st.caption(f"Select a child registered at **{sel_site}** to remove their profile.")
 
     try:
-        # Fetch only the kids registered at the current active site location
         kids_to_delete_res = supabase.table("children").select("name").eq("location", sel_site).execute()
         delete_roster = sorted([k['name'] for k in kids_to_delete_res.data])
     except Exception as e:
@@ -281,16 +275,13 @@ elif page == "Admin Settings":
     else:
         with st.form("delete_child_form"):
             child_to_remove = st.selectbox("Select Child to Delete", delete_roster)
-            
-            st.warning(f"⚠️ Warning: This will permanently remove {child_to_remove} from the children registry.")
+            st.warning(f"⚠️ Warning: This will permanently remove {child_to_remove} from the registry.")
             confirm_delete = st.checkbox(f"I confirm that I want to delete {child_to_remove} permanently.")
-            
-            delete_submitted = st.form_submit_button("Delete Child Profile", type="secondary")
+            delete_submitted = st.form_submit_button("Delete Child Profile")
             
             if delete_submitted:
                 if confirm_delete:
                     try:
-                        # Execute the deletion query in Supabase
                         supabase.table("children").delete().eq("name", child_to_remove).eq("location", sel_site).execute()
                         st.success(f"💥 Successfully removed {child_to_remove} from the database.")
                         st.rerun()
