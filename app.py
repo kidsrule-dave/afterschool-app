@@ -333,6 +333,7 @@ elif page == "NCS Compliance":
     st.caption(f"Audit-ready statutory compliance intelligence engine for **{sel_site}**.")
     
     try:
+        # Fetch finalized attendance records
         compliance_res = (
             supabase.table("attendance")
             .select("date", "name", "session_type", "check_in", "check_out", "collected_by", "calculated_hours")
@@ -342,9 +343,14 @@ elif page == "NCS Compliance":
             .execute()
         )
         compliance_data = compliance_res.data
+        
+        # Fetch parents' weekly booking requirements to compute unused benchmarks
+        bookings_res = supabase.table("weekly_bookings").select("child_name", "day_of_week", "breakfast_club", "afterschool").eq("location", sel_site).execute()
+        bookings_data = bookings_res.data
     except Exception as e:
-        st.error(f"Failed to fetch compliance logs: {e}")
+        st.error(f"Failed to fetch compliance or booking logs: {e}")
         compliance_data = []
+        bookings_data = []
         
     if not compliance_data:
         st.info(f"No completed checkout logs available for {sel_site} to compile compliance metrics.")
@@ -354,18 +360,19 @@ elif page == "NCS Compliance":
         
         # --- GLOBAL SUMMARY STATS WIDGET ---
         total_hours_sum = int(df["calculated_hours"].sum())
-        col_metric, _ = st.columns([1, 2])
+        col_metric, _ = st.columns()
         with col_metric:
             st.metric(label="⏳ Total Rounded NCS Hours (All Time)", value=f"{total_hours_sum} hrs")
             
         st.write("---")
         
-        # --- THE 4 SPECIFIC COMPLIANCE REPORTS TABS ---
-        rep_tab1, rep_tab2, rep_tab3, rep_tab4 = st.tabs([
-            "📋 1. Master Roster Overview", 
-            "👦 2. Hours Claim Summary", 
-            "🌅 3. Session Breakdown Audit", 
-            "🔑 4. Collector Verification Log"
+        # --- THE 5 SPECIFIC COMPLIANCE REPORTS TABS ---
+        rep_tab1, rep_tab2, rep_tab3, rep_tab4, rep_tab5 = st.tabs([
+            "📋 1. Master Roster", 
+            "👦 2. Hours Summary", 
+            "🌅 3. Session Breakdown", 
+            "🔑 4. Collector Verification",
+            "📉 5. Unused Hours Report"
         ])
         
         # ----------------------------------------------------
@@ -373,16 +380,12 @@ elif page == "NCS Compliance":
         # ----------------------------------------------------
         with rep_tab1:
             st.subheader("📋 Master Compliance Roster Overview")
-            st.caption("Complete historical timeline data grid showing all finalized attendance records.")
-            
             df_r1 = df.rename(columns={
                 "date": "Date", "name": "Child Name", "session_type": "Session",
                 "check_in": "Sign-In", "check_out": "Sign-Out", 
                 "collected_by": "Collected By", "calculated_hours": "Claimed Hours"
             })
-            
             st.dataframe(df_r1, use_container_width=True)
-            
             csv_r1 = df_r1.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Master Overview (CSV)", data=csv_r1, file_name=f"ncs_master_{sel_site.lower()}.csv", mime="text/csv", key="dl_r1")
 
@@ -391,16 +394,11 @@ elif page == "NCS Compliance":
         # ----------------------------------------------------
         with rep_tab2:
             st.subheader("👦 Student Hours Claim Summary")
-            st.caption("Aggregated total NCS rounded operational hours claimed per individual child.")
-            
-            # Grouping data to count totals per child
             df_r2 = df.groupby("name")["calculated_hours"].agg(["sum", "count", "mean"]).reset_index()
             df_r2.columns = ["Child Name", "Total Claimed Hours", "Total Days Attended", "Avg Hours / Day"]
             df_r2["Avg Hours / Day"] = df_r2["Avg Hours / Day"].round(1)
             df_r2 = df_r2.sort_values(by="Total Claimed Hours", ascending=False)
-            
             st.dataframe(df_r2, use_container_width=True)
-            
             csv_r2 = df_r2.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Hours Summary (CSV)", data=csv_r2, file_name=f"ncs_summary_{sel_site.lower()}.csv", mime="text/csv", key="dl_r2")
 
@@ -409,13 +407,9 @@ elif page == "NCS Compliance":
         # ----------------------------------------------------
         with rep_tab3:
             st.subheader("🌅 Club & Session Type Breakdown")
-            st.caption("Comparative analysis metrics dividing hours across Breakfast Club and Afterschool tracks.")
-            
             df_r3 = df.groupby("session_type")["calculated_hours"].agg(["sum", "count"]).reset_index()
             df_r3.columns = ["Session Type", "Total Accumulated Hours", "Total Student Checkouts"]
-            
             st.dataframe(df_r3, use_container_width=True)
-            
             csv_r3 = df_r3.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Session Breakdown (CSV)", data=csv_r3, file_name=f"ncs_sessions_{sel_site.lower()}.csv", mime="text/csv", key="dl_r3")
 
@@ -424,17 +418,64 @@ elif page == "NCS Compliance":
         # ----------------------------------------------------
         with rep_tab4:
             st.subheader("🔑 Collector Authorization Verification Log")
-            st.caption("Security registry pairing historical sign-out timestamps directly with the designated collector identity.")
-            
             df_r4 = df[["date", "name", "check_out", "collected_by"]].copy()
             df_r4.columns = ["Date", "Child Name", "Sign-Out Time", "Collector Identity Given"]
             df_r4 = df_r4.sort_values(by="Date", ascending=False)
-            
             st.dataframe(df_r4, use_container_width=True)
-            
             csv_r4 = df_r4.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Collector Log (CSV)", data=csv_r4, file_name=f"ncs_collectors_{sel_site.lower()}.csv", mime="text/csv", key="dl_r4")
-# --- 9. ADMIN SETTINGS ---
+
+        # ----------------------------------------------------
+        # REPORT 5: UNUSED HOURS REPORT
+        # ----------------------------------------------------
+        with rep_tab5:
+            st.subheader("📉 NCS Unused Hours & Shortfall Audit")
+            st.caption("Identifies the variance between parent weekly booked schedules and actual hours completed.")
+            
+            if not bookings_data:
+                st.info("No schedule templates logged in the Weekly Planner to evaluate allocation shortfalls.")
+            else:
+                # 1. Compute total weekly funded hours per child based on planner selections
+                # Assumption: Breakfast Club = 1 hr funded baseline, Afterschool = 3 hrs funded baseline
+                booking_list = []
+                for b in bookings_data:
+                    allocated_hrs = 0
+                    if b.get("breakfast_club"): allocated_hrs += 1
+                    if b.get("afterschool"): allocated_hrs += 3
+                    booking_list.append({"name": b["child_name"], "allocated_hours": allocated_hrs})
+                
+                df_bookings = pd.DataFrame(booking_list)
+                df_allocated_sum = df_bookings.groupby("name")["allocated_hours"].sum().reset_index()
+                df_allocated_sum.columns = ["Child Name", "Weekly Booked Hours"]
+                
+                # 2. Extract average weekly attended hours from the live attendance logs
+                # Map date to calendar weeks to compute true weekly attendance tracking values
+                df_calc = df.copy()
+                df_calc["date_parsed"] = pd.to_datetime(df_calc["date"])
+                df_calc["year_week"] = df_calc["date_parsed"].dt.strftime("%Y-%U")
+                
+                df_weekly_attendance = df_calc.groupby(["name", "year_week"])["calculated_hours"].sum().reset_index()
+                df_avg_actual = df_weekly_attendance.groupby("name")["calculated_hours"].mean().reset_index()
+                df_avg_actual.columns = ["Child Name", "Avg Weekly Attended Hours"]
+                df_avg_actual["Avg Weekly Attended Hours"] = df_avg_actual["Avg Weekly Attended Hours"].round(1)
+                
+                # 3. Merge Booked vs. Attended data trees to display the variance metrics
+                df_unused_report = pd.merge(df_allocated_sum, df_avg_actual, on="Child Name", how="left")
+                df_unused_report["Avg Weekly Attended Hours"] = df_unused_report["Avg Weekly Attended Hours"].fillna(0)
+                
+                # Variance Equation calculation logic
+                df_unused_report["Unused Hours Baseline"] = df_unused_report["Weekly Booked Hours"] - df_unused_report["Avg Weekly Attended Hours"]
+                df_unused_report["Unused Hours Baseline"] = df_unused_report["Unused Hours Baseline"].apply(lambda x: max(0.0, round(x, 1)))
+                
+                # Sort children displaying highest leakage values right at the top
+                df_unused_report = df_unused_report.sort_values(by="Unused Hours Baseline", ascending=False)
+                
+                # Style rows with significant leakage as warning elements
+                st.dataframe(df_unused_report, use_container_width=True)
+                st.warning("💡 *Pobal Compliance Tip:* Flag records tracking a continuous weekly shortfall above **8 hours** to protect your funding eligibility parameters.")
+                
+                csv_r5 = df_unused_report.to_csv(index=False).encode('utf-8')
+                st.download_button("📥 Download Unused Hours Audit (CSV)", data=csv_r5, file_name=f"ncs_unused_hours_{sel_site.lower()}.csv", mime="text/csv", key="dl_r5")
 elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
     st.subheader("Register a New Child")
