@@ -220,7 +220,6 @@ elif page == "Quick-Tap Board":
                             confirm_btn = st.form_submit_button("Confirm Child Sign-Out", type="primary", use_container_width=True)
                             
                             if confirm_btn:
-Use code with caution.
                                 now_time = datetime.now().strftime("%H:%M:%S")
                                 calculated_hours = ncs_round(selected_log['check_in'], now_time)
                                 
