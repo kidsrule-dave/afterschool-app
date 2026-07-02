@@ -426,7 +426,7 @@ elif page == "NCS Compliance":
             st.download_button("📥 Download Collector Log (CSV)", data=csv_r4, file_name=f"ncs_collectors_{sel_site.lower()}.csv", mime="text/csv", key="dl_r4")
 
         # ----------------------------------------------------
-        # REPORT 5: UNUSED HOURS REPORT
+        # REPORT 5: UNUSED HOURS REPORT (WITH AUTOMATED POBAL FLAGS)
         # ----------------------------------------------------
         with rep_tab5:
             st.subheader("📉 NCS Unused Hours & Shortfall Audit")
@@ -436,7 +436,6 @@ elif page == "NCS Compliance":
                 st.info("No schedule templates logged in the Weekly Planner to evaluate allocation shortfalls.")
             else:
                 # 1. Compute total weekly funded hours per child based on planner selections
-                # Assumption: Breakfast Club = 1 hr funded baseline, Afterschool = 3 hrs funded baseline
                 booking_list = []
                 for b in bookings_data:
                     allocated_hrs = 0
@@ -448,8 +447,7 @@ elif page == "NCS Compliance":
                 df_allocated_sum = df_bookings.groupby("name")["allocated_hours"].sum().reset_index()
                 df_allocated_sum.columns = ["Child Name", "Weekly Booked Hours"]
                 
-                # 2. Extract average weekly attended hours from the live attendance logs
-                # Map date to calendar weeks to compute true weekly attendance tracking values
+                # 2. Extract average weekly attended hours from live attendance logs
                 df_calc = df.copy()
                 df_calc["date_parsed"] = pd.to_datetime(df_calc["date"])
                 df_calc["year_week"] = df_calc["date_parsed"].dt.strftime("%Y-%U")
@@ -459,23 +457,43 @@ elif page == "NCS Compliance":
                 df_avg_actual.columns = ["Child Name", "Avg Weekly Attended Hours"]
                 df_avg_actual["Avg Weekly Attended Hours"] = df_avg_actual["Avg Weekly Attended Hours"].round(1)
                 
-                # 3. Merge Booked vs. Attended data trees to display the variance metrics
+                # 3. Merge Booked vs. Attended
                 df_unused_report = pd.merge(df_allocated_sum, df_avg_actual, on="Child Name", how="left")
                 df_unused_report["Avg Weekly Attended Hours"] = df_unused_report["Avg Weekly Attended Hours"].fillna(0)
                 
-                # Variance Equation calculation logic
-                df_unused_report["Unused Hours Baseline"] = df_unused_report["Weekly Booked Hours"] - df_unused_report["Avg Weekly Attended Hours"]
-                df_unused_report["Unused Hours Baseline"] = df_unused_report["Unused Hours Baseline"].apply(lambda x: max(0.0, round(x, 1)))
+                # Variance Equation
+                df_unused_report["Unused Hours Variance"] = df_unused_report["Weekly Booked Hours"] - df_unused_report["Avg Weekly Attended Hours"]
+                df_unused_report["Unused Hours Variance"] = df_unused_report["Unused Hours Variance"].apply(lambda x: max(0.0, round(x, 1)))
                 
-                # Sort children displaying highest leakage values right at the top
-                df_unused_report = df_unused_report.sort_values(by="Unused Hours Baseline", ascending=False)
+                # --- NEW POBAL AUDIT FLAG LOGIC ---
+                # Create a clear status text column
+                df_unused_report["Pobal Audit Status"] = df_unused_report["Unused Hours Variance"].apply(
+                    lambda x: "🚨 FLAG: Variance > 8 Hours" if x >= 8.0 else "🟢 Compliant"
+                )
                 
-                # Style rows with significant leakage as warning elements
-                st.dataframe(df_unused_report, use_container_width=True)
-                st.warning("💡 *Pobal Compliance Tip:* Flag records tracking a continuous weekly shortfall above **8 hours** to protect your funding eligibility parameters.")
+                # Sort to show at-risk children first
+                df_unused_report = df_unused_report.sort_values(by="Unused Hours Variance", ascending=False)
+                
+                # Style rows with significant leakage as warning elements using Streamlit dataframe style properties
+                def highlight_pobal_flags(row):
+                    if "🚨" in str(row["Pobal Audit Status"]):
+                        return ['background-color: rgba(255, 75, 75, 0.2)'] * len(row)
+                    return [''] * len(row)
+                
+                styled_df = df_unused_report.style.apply(highlight_pobal_flags, axis=1)
+                
+                # Render Interactive Data Table
+                st.dataframe(styled_df, use_container_width=True)
+                
+                # Trigger a direct warning alert banner on screen if any child crosses the threshold
+                flagged_count = len(df_unused_report[df_unused_report["Unused Hours Variance"] >= 8.0])
+                if flagged_count > 0:
+                    st.error(f"⚠️ **Pobal Compliance Alert:** There are **{flagged_count} child profile(s)** tracking a weekly shortfall above 8 hours. Review registrations on the Hive to prevent funding eligibility rollbacks.")
+                else:
+                    st.success("✅ **Pobal Compliance Check:** All active children are currently within safe attendance tolerance margins.")
                 
                 csv_r5 = df_unused_report.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Download Unused Hours Audit (CSV)", data=csv_r5, file_name=f"ncs_unused_hours_{sel_site.lower()}.csv", mime="text/csv", key="dl_r5")
+                st.download_button("📥 Download Unused Hours Audit (CSV)", data=csv_r5, file_name=f"ncs_pobal_flags_{sel_site.lower()}.csv", mime="text/csv", key="dl_r5")
 elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
     st.subheader("Register a New Child")
