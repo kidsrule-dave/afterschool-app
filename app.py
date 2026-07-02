@@ -210,7 +210,13 @@ elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
     st.subheader("Register a New Child")
     
-        with st.form("register_child_form", clear_on_submit=True):
+# --- 7. ADMIN SETTINGS ---
+elif page == "Admin Settings":
+    st.title("⚙️ Admin Settings")
+    st.subheader("Register a New Child")
+    
+    # This line needs exactly 4 spaces of indentation
+    with st.form("register_child_form", clear_on_submit=True):
         new_name = st.text_input("Child's Full Name")
         new_location = st.selectbox("Assign Site Location", sites)
         
@@ -241,7 +247,7 @@ elif page == "Admin Settings":
                     supabase.table("children").insert({
                         "name": new_name,
                         "location": new_location,
-                        "ncs_chit_number": ncs_chit, # Saved directly to Supabase record
+                        "ncs_chit_number": ncs_chit,
                         "emergency_name": em_name,
                         "emergency_phone": em_phone,
                         "pickup_1_name": p1_n,
@@ -255,8 +261,6 @@ elif page == "Admin Settings":
                     st.rerun()
                 except Exception as e:
                     st.error(f"Failed to add child profile: {e}")
-            else:
-                st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
             else:
                 st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
                 # --- DELETE A CHILD SECTION ---
