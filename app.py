@@ -210,9 +210,13 @@ elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
     st.subheader("Register a New Child")
     
-    with st.form("register_child_form", clear_on_submit=True):
+     with st.form("register_child_form", clear_on_submit=True):
         new_name = st.text_input("Child's Full Name")
         new_location = st.selectbox("Assign Site Location", sites)
+        
+        # New NCS Chit Number field added right below location selector
+        ncs_chit = st.text_input("NCS CHIT / CHN Number (Optional)", placeholder="e.g., CHN1234567")
+        
         em_name = st.text_input("Primary Emergency Contact Name")
         em_phone = st.text_input("Primary Emergency Contact Phone")
         
@@ -237,6 +241,7 @@ elif page == "Admin Settings":
                     supabase.table("children").insert({
                         "name": new_name,
                         "location": new_location,
+                        "ncs_chit_number": ncs_chit, # Saved directly to Supabase record
                         "emergency_name": em_name,
                         "emergency_phone": em_phone,
                         "pickup_1_name": p1_n,
@@ -247,8 +252,11 @@ elif page == "Admin Settings":
                         "pickup_3_phone": p3_p
                     }).execute()
                     st.success(f"🎉 Successfully registered {new_name} at {new_location} with pickup slots!")
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Failed to add child profile: {e}")
+            else:
+                st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
             else:
                 st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
                 # --- DELETE A CHILD SECTION ---
