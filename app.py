@@ -243,7 +243,6 @@ elif page == "Quick-Tap Board":
                     else:
                         st.info("💡 Please tap one of the names above to select the collector.")
 
-# --- 7. ATTENDANCE ---
 elif page == "Attendance":
     st.title("📋 Live Site Attendance Feed")
     st.caption(f"Showing all historical and active daily logs registered for {sel_site}.")
@@ -254,7 +253,7 @@ elif page == "Attendance":
     except Exception as e:
         st.error(f"Failed to load attendance logs: {e}")
         logs_data = []
-        
+
     if not logs_data:
         st.info(f"No attendance logs have been recorded for {sel_site} yet.")
     else:
@@ -277,7 +276,6 @@ elif page == "Attendance":
             use_container_width=True,
             column_order=["Date", "Child Name", "Session Type", "Sign-In", "Sign-Out", "Collected By", "NCS Hours"]
         )
-
 # --- 8. NCS COMPLIANCE ---
 elif page == "NCS Compliance":
     st.title("📊 NCS Compliance Dashboard")
