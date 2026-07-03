@@ -507,6 +507,41 @@ elif page == "NCS Compliance":
                 st.download_button("📥 Download Unused Hours Audit (CSV)", data=csv_r5, file_name=f"ncs_pobal_flags_{sel_site.lower()}.csv", mime="text/csv", key="dl_r5")
 elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
+    
+    # --- 1. LOCAL PAGE PASSKEY PROTECTION ---
+    if "admin_page_unlocked" not in st.session_state:
+        st.session_state["admin_page_unlocked"] = False
+
+    if not st.session_state["admin_page_unlocked"]:
+        st.subheader("🔒 Management Authorization Required")
+        st.caption("This area contains sensitive child protection rosters and registration tools.")
+        
+        # Mask text input using type="password"
+        mgmt_password = st.text_input("Enter Management Passcode:", type="password", key="mgmt_page_pass")
+        
+        if st.button("Unlock Management Panel", type="primary", use_container_width=True):
+            # Change 'KidsRuleAdmin!' to your preferred secure management password
+            if mgmt_password == "KidsRuleAdmin!":
+                st.session_state["admin_page_unlocked"] = True
+                st.rerun()
+            else:
+                st.error("❌ Incorrect management passcode. Access denied.")
+        
+        st.stop() # Halts page compilation right here if unauthorized
+
+    # --- 2. AUTHENTICATED PANEL MANAGEMENT AREA ---
+    # This section only runs if st.session_state["admin_page_unlocked"] is True
+    
+    # Simple logout button to let managers lock the screen when leaving the desk
+    c1, c2 = st.columns([4, 1])
+    with c1:
+        st.success("🔓 Management Session Active")
+    with c2:
+        if st.button("Lock Screen", use_container_width=True):
+            st.session_state["admin_page_unlocked"] = False
+            st.rerun()
+            
+    st.divider()
     st.subheader("Register a New Child")
     
     with st.form("register_child_form", clear_on_submit=True):
@@ -535,7 +570,6 @@ elif page == "Admin Settings":
         if submitted_child:
             if new_name and em_name and em_phone:
                 try:
-                    # Ingestion forces is_active to True to ensure they show up in operational views
                     supabase.table("children").insert({
                         "name": new_name,
                         "location": new_location,
@@ -557,6 +591,55 @@ elif page == "Admin Settings":
             else:
                 st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
 
+    # --- 3. SOFT ARCHIVE ROSTER MANAGEMENT ---
+    st.divider()
+    st.subheader(f"👥 Manage Active Roster ({sel_site})")
+    st.caption("Review current active students. Archiving a student preserves their history for the 6-year legal retention mandate.")
+    
+    try:
+        roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
+        site_roster = roster_res.data
+    except Exception as e:
+        st.error(f"Error loading system roster: {e}")
+        site_roster = []
+        
+    if not site_roster:
+        st.info(f"No active children registered at the {sel_site} hub.")
+    else:
+        roster_df = pd.DataFrame(site_roster)
+        display_roster = roster_df[[
+            'name', 'ncs_chit_number', 'emergency_name', 'emergency_phone', 
+            'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
+        ]].rename(columns={
+            'name': 'Child Name',
+            'ncs_chit_number': 'NCS CHIT',
+            'emergency_name': 'Emergency Contact',
+            'emergency_phone': 'Emergency Phone',
+            'pickup_1_name': 'Pickup 1',
+            'pickup_2_name': 'Pickup 2',
+            'pickup_3_name': 'Pickup 3'
+        })
+        
+        st.dataframe(display_roster, use_container_width=True, hide_index=True)
+        
+        st.write("#### 📦 Archive Student Profile")
+        child_to_archive = st.selectbox(
+            "Select child profile to archive (hides them from active check-in grids):", 
+            options=[c['name'] for c in site_roster],
+            index=None,
+            placeholder="Choose profile to archive..."
+        )
+        
+        if child_to_archive:
+            confirm_archive = st.checkbox(f"Confirm I want to archive {child_to_archive}. Their historical log remains securely stored for compliance auditing.")
+            
+            if st.button("Archive Profile", type="primary", disabled=not confirm_archive):
+                try:
+                    supabase.table("children").update({"is_active": False}).eq("name", child_to_archive).eq("location", sel_site).execute()
+                    st.success(f"📦 {child_to_archive} has been safely archived. Profile hidden from live views.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to archive child profile record: {e}")
     # --- SOFT ARCHIVE ROSTER MANAGEMENT ---
     st.divider()
     st.subheader(f"👥 Manage Active Roster ({sel_site})")
