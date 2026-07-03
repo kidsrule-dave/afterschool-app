@@ -678,7 +678,8 @@ elif page == "Admin Settings":
             "Select child profile to archive (hides them from active check-in grids):", 
             options=[c['name'] for c in site_roster],
             index=None,
-            placeholder="Choose profile to archive..."
+            placeholder="Choose profile to archive...",
+            key="admin_archive_child_selectbox"  # 👈 Explicit unique key added here
         )
         
         if child_to_archive:
