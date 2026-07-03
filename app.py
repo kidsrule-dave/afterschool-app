@@ -72,7 +72,7 @@ elif page == "Weekly Planner":
     lock_planner = False
     
     try:
-        kids = supabase.table("children").select("name").eq("location", sel_site).execute()
+        kids = supabase.table("children").select("name").eq("location", sel_site).eq("is_active", True).execute()
         child_names = sorted([k['name'] for k in kids.data])
     except Exception as e:
         st.error(f"Error loading children roster: {e}")
