@@ -255,8 +255,12 @@ elif page == "Attendance":
     now_time_str = datetime.now().strftime("%H:%M:%S")
 
     try:
-        # Fetch all children registered to this specific site location
-        all_kids_res = supabase.table("children").select("name").eq("location", sel_site).execute()
+        # FILTER ADDED: Only fetch registered children who are actively enrolled (.eq("is_active", True))
+        all_kids_res = supabase.table("children") \
+            .select("name") \
+            .eq("location", sel_site) \
+            .eq("is_active", True) \
+            .execute()
         registered_kids = sorted([k['name'] for k in all_kids_res.data])
         
         # Fetch children who are ALREADY checked in today (check_out is null)
@@ -271,7 +275,7 @@ elif page == "Attendance":
     available_to_signin = [name for name in registered_kids if name not in checked_in_names]
 
     if not available_to_signin:
-        st.info("🎒 All registered children for this site location are currently checked in.")
+        st.info("🎒 All active registered children for this site location are currently checked in.")
     else:
         # Choose Session Type for the tap action
         session_choice = st.radio("Select Session Type for Tap Sign-In:", ["Afterschool", "Breakfast Club"], horizontal=True)
@@ -299,7 +303,9 @@ elif page == "Attendance":
     
     # --- 2. RENDER HISTORICAL ATTENDANCE FEED ---
     st.subheader("📜 Attendance History Log")
+    st.caption("Complete, permanent digital history kept for the 6-year regulatory hold requirement.")
     try:
+        # Note: We do NOT filter by is_active here, ensuring past attendance data remains visible forever
         all_logs_res = supabase.table("attendance").select("*").eq("location", sel_site).order("date", desc=True).execute()
         logs_data = all_logs_res.data
     except Exception as e:
@@ -311,6 +317,10 @@ elif page == "Attendance":
     else:
         df_logs = pd.DataFrame(logs_data)
         
+        # Handle structural key safety checks for the column rename step
+        if "calculated_hours" not in df_logs.columns:
+            df_logs["calculated_hours"] = 0
+            
         df_logs_display = df_logs.rename(columns={
             "date": "Date",
             "name": "Child Name",
@@ -324,6 +334,7 @@ elif page == "Attendance":
         st.dataframe(
             df_logs_display,
             use_container_width=True,
+            hide_index=True,
             column_order=["Date", "Child Name", "Session Type", "Sign-In", "Sign-Out", "Collected By", "NCS Hours"]
         )
 
