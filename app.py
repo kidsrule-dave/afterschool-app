@@ -524,6 +524,7 @@ elif page == "Admin Settings":
         if submitted_child:
             if new_name and em_name and em_phone:
                 try:
+                    # Ingestion forces is_active to True to ensure they show up in operational views
                     supabase.table("children").insert({
                         "name": new_name,
                         "location": new_location,
@@ -535,7 +536,8 @@ elif page == "Admin Settings":
                         "pickup_2_name": p2_n,
                         "pickup_2_phone": p2_p,
                         "pickup_3_name": p3_n,
-                        "pickup_3_phone": p3_p
+                        "pickup_3_phone": p3_p,
+                        "is_active": True
                     }).execute()
                     st.success(f"🎉 Successfully registered {new_name} at {new_location} with pickup slots!")
                     st.rerun()
@@ -544,6 +546,58 @@ elif page == "Admin Settings":
             else:
                 st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
 
+    # --- SOFT ARCHIVE ROSTER MANAGEMENT ---
+    st.divider()
+    st.subheader(f"👥 Manage Active Roster ({sel_site})")
+    st.caption("Review current active students. Archiving a student preserves their history for the 6-year legal retention mandate.")
+    
+    try:
+        # Strictly fetch children who are currently active at this site location
+        roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
+        site_roster = roster_res.data
+    except Exception as e:
+        st.error(f"Error loading system roster: {e}")
+        site_roster = []
+        
+    if not site_roster:
+        st.info(f"No active children registered at the {sel_site} hub.")
+    else:
+        roster_df = pd.DataFrame(site_roster)
+        display_roster = roster_df[[
+            'name', 'ncs_chit_number', 'emergency_name', 'emergency_phone', 
+            'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
+        ]].rename(columns={
+            'name': 'Child Name',
+            'ncs_chit_number': 'NCS CHIT',
+            'emergency_name': 'Emergency Contact',
+            'emergency_phone': 'Emergency Phone',
+            'pickup_1_name': 'Pickup 1',
+            'pickup_2_name': 'Pickup 2',
+            'pickup_3_name': 'Pickup 3'
+        })
+        
+        st.dataframe(display_roster, use_container_width=True, hide_index=True)
+        
+        # Safe Archiving Interface instead of deletion
+        st.write("#### 📦 Archive Student Profile")
+        child_to_archive = st.selectbox(
+            "Select child profile to archive (hides them from active check-in grids):", 
+            options=[c['name'] for c in site_roster],
+            index=None,
+            placeholder="Choose profile to archive..."
+        )
+        
+        if child_to_archive:
+            confirm_archive = st.checkbox(f"Confirm I want to archive {child_to_archive}. Their historical log remains securely stored for compliance auditing.")
+            
+            if st.button("Archive Profile", type="primary", disabled=not confirm_archive):
+                try:
+                    # Updates the state value instead of executing a destructive row deletion
+                    supabase.table("children").update({"is_active": False}).eq("name", child_to_archive).eq("location", sel_site).execute()
+                    st.success(f"📦 {child_to_archive} has been safely archived. Profile hidden from live views.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to archive child profile record: {e}")
     # --- 9B. ARCHIVE AND COMPLIANCE NOTICE ---
     st.markdown("---")
     st.info("🔒 **Data Retention Lock Active:** In accordance with Pobal and Tusla childcare regulations, permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
