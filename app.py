@@ -321,13 +321,68 @@ elif page == "Attendance":
             hide_index=True,
             column_order=["Date", "Child Name", "Session Type", "Sign-In", "Sign-Out", "Collected By", "NCS Hours"]
         )
+# --- 8. STAFFING REPORT ---
+elif page == "Staffing Report":
+    st.title("📋 Daily Staffing & Attendance Report")
+    st.caption("Review expected daily rosters based on parental bookings to schedule staffing levels.")
+    
+    report_day = st.selectbox("Select Day to View", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Today (Current)"])
+    
+    try:
+        bookings_res = supabase.table("weekly_bookings").select("child_name, day_of_week, breakfast_club, afterschool").eq("location", sel_site).execute()
+        bookings_data = bookings_res.data
+        
+        if not bookings_data:
+            st.info(f"No parent schedule templates found for {sel_site} in the system database.")
+        else:
+            df_bookings = pd.DataFrame(bookings_data)
+            
+            if report_day == "Today (Current)":
+                days_map = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                target_day = days_map[datetime.now().weekday()]
+            else:
+                target_day = report_day
+                
+            df_filtered = df_bookings[df_bookings['day_of_week'] == target_day].copy()
+            
+            if df_filtered.empty:
+                st.warning(f"No children are booked to attend {sel_site} on {target_day}.")
+            else:
+                df_filtered = df_filtered[(df_filtered['breakfast_club'] == True) | (df_filtered['afterschool'] == True)]
+                
+                df_filtered['Breakfast Club'] = df_filtered['breakfast_club'].apply(lambda x: "✅ Expected" if x else "❌ No")
+                df_filtered['Afterschool'] = df_filtered['afterschool'].apply(lambda x: "✅ Expected" if x else "❌ No")
+                
+                df_display = df_filtered[['child_name', 'Breakfast Club', 'Afterschool']].rename(columns={'child_name': 'Child Name'})
+                df_display = df_display.sort_values(by="Child Name")
+                
+                total_bc = int(df_filtered['breakfast_club'].sum())
+                total_as = int(df_filtered['afterschool'].sum())
+                
+                m1, m2 = st.columns(2)
+                m1.metric("🌅 Expected Breakfast Club", f"{total_bc} Kids")
+                m2.metric("👦 Expected Afterschool", f"{total_as} Kids")
+                
+                st.write(f"### 📋 Expected Roster for {target_day}")
+                st.dataframe(df_display, use_container_width=True, hide_index=True)
+                
+                csv = df_display.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download This Roster (CSV)",
+                    data=csv,
+                    file_name=f"staffing_roster_{sel_site.lower()}_{target_day.lower()}.csv",
+                    mime="text/csv"
+                )
+                st.info("💡 **Printing Tip:** To print this roster for staff rooms, press **Ctrl + P** (Windows) or **Cmd + P** (Mac) to use your web browser's built-in printing panel.")
+    except Exception as e:
+        st.error(f"Error compiling staffing intelligence: {e}")
 # --- 8. NCS COMPLIANCE ---
+# --- 8B. NCS COMPLIANCE ---
 elif page == "NCS Compliance":
     st.title("📊 NCS Compliance Reporting Hub")
     st.caption(f"Audit-ready statutory compliance intelligence engine for **{sel_site}**.")
     
     try:
-        # Fetch finalized attendance records
         compliance_res = (
             supabase.table("attendance")
             .select("date", "name", "session_type", "check_in", "check_out", "collected_by", "calculated_hours")
@@ -337,8 +392,6 @@ elif page == "NCS Compliance":
             .execute()
         )
         compliance_data = compliance_res.data
-        
-        # Fetch parents' weekly booking requirements to compute unused benchmarks
         bookings_res = supabase.table("weekly_bookings").select("child_name", "day_of_week", "breakfast_club", "afterschool").eq("location", sel_site).execute()
         bookings_data = bookings_res.data
     except Exception as e:
@@ -350,19 +403,10 @@ elif page == "NCS Compliance":
         st.info(f"No completed checkout logs available for {sel_site} to compile compliance metrics.")
     else:
         df = pd.DataFrame(compliance_data)
-        
-        # Create structural container navigation for different statutory print layouts
         rep_tab1, rep_tab2, rep_tab3, rep_tab4, rep_tab5 = st.tabs([
-            "📋 Master Overview", 
-            "👦 Student Hours Summary", 
-            "🌅 Session Breakdown", 
-            "🔑 Collector Authorization Log",
-            "📉 Pobal Unused Hours Audit"
+            "📋 Master Overview", "👦 Student Hours Summary", "🌅 Club Breakdown", "🔑 Collector Authorization Log", "📉 Pobal Unused Hours Audit"
         ])
         
-        # ----------------------------------------------------
-        # REPORT 1: MASTER OVERVIEW
-        # ----------------------------------------------------
         with rep_tab1:
             st.subheader("📋 Comprehensive Compliance Archive Matrix")
             df_r1_display = df.rename(columns={
@@ -373,9 +417,6 @@ elif page == "NCS Compliance":
             csv_r1 = df_r1_display.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Master Overview (CSV)", data=csv_r1, file_name=f"ncs_master_{sel_site.lower()}.csv", mime="text/csv", key="dl_r1")
 
-        # ----------------------------------------------------
-        # REPORT 2: HOURS CLAIM SUMMARY
-        # ----------------------------------------------------
         with rep_tab2:
             st.subheader("👦 Student Hours Claim Summary")
             df_r2 = df.groupby("name")["calculated_hours"].agg(["sum", "count", "mean"]).reset_index()
@@ -386,9 +427,6 @@ elif page == "NCS Compliance":
             csv_r2 = df_r2.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Hours Summary (CSV)", data=csv_r2, file_name=f"ncs_summary_{sel_site.lower()}.csv", mime="text/csv", key="dl_r2")
 
-        # ----------------------------------------------------
-        # REPORT 3: SESSION BREAKDOWN AUDIT
-        # ----------------------------------------------------
         with rep_tab3:
             st.subheader("🌅 Club & Session Type Breakdown")
             df_r3 = df.groupby("session_type")["calculated_hours"].agg(["sum", "count"]).reset_index()
@@ -397,9 +435,6 @@ elif page == "NCS Compliance":
             csv_r3 = df_r3.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Session Breakdown (CSV)", data=csv_r3, file_name=f"ncs_sessions_{sel_site.lower()}.csv", mime="text/csv", key="dl_r3")
 
-        # ----------------------------------------------------
-        # REPORT 4: COLLECTOR VERIFICATION AUDIT
-        # ----------------------------------------------------
         with rep_tab4:
             st.subheader("🔑 Collector Authorization Verification Log")
             df_r4 = df[["date", "name", "check_out", "collected_by"]].copy()
@@ -409,79 +444,34 @@ elif page == "NCS Compliance":
             csv_r4 = df_r4.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Collector Log (CSV)", data=csv_r4, file_name=f"ncs_collectors_{sel_site.lower()}.csv", mime="text/csv", key="dl_r4")
 
-        # ----------------------------------------------------
-        # REPORT 5: UNUSED HOURS REPORT (WITH AUTOMATED POBAL FLAGS)
-        # ----------------------------------------------------
         with rep_tab5:
             st.subheader("📉 NCS Unused Hours & Shortfall Audit")
-            st.caption("Identifies the variance between parent weekly booked schedules and actual hours completed.")
-            
             if not bookings_data:
-                st.info("No schedule templates logged in the Weekly Planner to evaluate allocation shortfalls.")
+                st.info("No schedule templates logged in the Weekly Planner.")
             else:
-                # 1. Compute total weekly funded hours per child based on planner selections
                 booking_list = []
                 for b in bookings_data:
                     allocated_hrs = 0
                     if b.get("breakfast_club"): allocated_hrs += 1
                     if b.get("afterschool"): allocated_hrs += 3
                     booking_list.append({"name": b["child_name"], "allocated_hours": allocated_hrs})
-                
                 df_bookings = pd.DataFrame(booking_list)
                 df_allocated_sum = df_bookings.groupby("name")["allocated_hours"].sum().reset_index()
                 df_allocated_sum.columns = ["Child Name", "Weekly Booked Hours"]
-                
-                # 2. Extract average weekly attended hours from live attendance logs
                 df_calc = df.copy()
                 df_calc["date_parsed"] = pd.to_datetime(df_calc["date"])
                 df_calc["year_week"] = df_calc["date_parsed"].dt.strftime("%Y-%U")
-                
                 df_weekly_attendance = df_calc.groupby(["name", "year_week"])["calculated_hours"].sum().reset_index()
                 df_avg_actual = df_weekly_attendance.groupby("name")["calculated_hours"].mean().reset_index()
                 df_avg_actual.columns = ["Child Name", "Avg Weekly Attended Hours"]
-                df_avg_actual["Avg Weekly Attended Hours"] = df_avg_actual["Avg Weekly Attended Hours"].round(1)
-                
-                # 3. Merge Booked vs. Attended
-                df_unused_report = pd.merge(df_allocated_sum, df_avg_actual, on="Child Name", how="left")
-                df_unused_report["Avg Weekly Attended Hours"] = df_unused_report["Avg Weekly Attended Hours"].fillna(0)
-                
-                # Variance Equation
-                df_unused_report["Unused Hours Variance"] = df_unused_report["Weekly Booked Hours"] - df_unused_report["Avg Weekly Attended Hours"]
-                df_unused_report["Unused Hours Variance"] = df_unused_report["Unused Hours Variance"].apply(lambda x: max(0.0, round(x, 1)))
-                
-                # --- NEW POBAL AUDIT FLAG LOGIC ---
-                df_unused_report["Pobal Audit Status"] = df_unused_report["Unused Hours Variance"].apply(
-                    lambda x: "🚨 FLAG: Variance > 8 Hours" if x >= 8.0 else "🟢 Compliant"
-                )
-                
-                # Sort to show at-risk children first
-                df_unused_report = df_unused_report.sort_values(by="Unused Hours Variance", ascending=False)
-                
-                # Style rows with significant leakage as warning elements
-                def highlight_pobal_flags(row):
-                    if "🚨" in str(row["Pobal Audit Status"]):
-                        return ['background-color: rgba(255, 75, 75, 0.2)'] * len(row)
-                    return [''] * len(row)
-                
-                styled_df = df_unused_report.style.apply(highlight_pobal_flags, axis=1)
-                
-                # Render Interactive Data Table
-                st.dataframe(styled_df, use_container_width=True)
-                
-                # Trigger direct structural alerts
-                flagged_count = len(df_unused_report[df_unused_report["Unused Hours Variance"] >= 8.0])
-                if flagged_count > 0:
-                    st.error(f"⚠️ **Pobal Compliance Alert:** There are **{flagged_count} child profile(s)** tracking a weekly shortfall above 8 hours. Review registrations on the Hive to prevent funding eligibility rollbacks.")
-                else:
-                    st.success("✅ **Pobal Compliance Check:** All active children are currently within safe attendance tolerance margins.")
-                
-                csv_r5 = df_unused_report.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Download Unused Hours Audit (CSV)", data=csv_r5, file_name=f"ncs_pobal_flags_{sel_site.lower()}.csv", mime="text/csv", key="dl_r5")
+                df_unused_report = pd.merge(df_allocated_sum, df_avg_actual, on="Child Name", how="left").fillna(0)
+                df_unused_report["Unused Hours Variance"] = (df_unused_report["Weekly Booked Hours"] - df_unused_report["Avg Weekly Attended Hours"]).apply(lambda x: max(0.0, round(x, 1)))
+                df_unused_report["Pobal Audit Status"] = df_unused_report["Unused Hours Variance"].apply(lambda x: "🚨 FLAG: Variance > 8 Hours" if x >= 8.0 else "🟢 Compliant")
+                st.dataframe(df_unused_report, use_container_width=True)
 # --- 9. ADMIN SETTINGS ---
 elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
     
-    # --- 1. LOCAL PAGE PASSKEY PROTECTION ---
     if "admin_page_unlocked" not in st.session_state:
         st.session_state["admin_page_unlocked"] = False
 
@@ -489,7 +479,6 @@ elif page == "Admin Settings":
         st.subheader("🔒 Management Authorization Required")
         st.caption("This area contains sensitive child protection rosters and registration tools.")
         
-        # Mask text input using type="password"
         mgmt_password = st.text_input("Enter Management Passcode:", type="password", key="mgmt_page_pass")
         
         if st.button("Unlock Management Panel", type="primary", use_container_width=True):
@@ -500,12 +489,10 @@ elif page == "Admin Settings":
                 st.error("❌ Incorrect passcode. Management access denied.")
                 
     else:
-        # --- 2. SOFT ARCHIVE ROSTER MANAGEMENT (UNLOCKED) ---
         st.subheader(f"👥 Manage Active Roster ({sel_site})")
         st.caption("Review current active students. Archiving a student preserves their history for the 6-year legal retention mandate.")
         
         try:
-            # Strictly fetch children who are currently active at this site location
             roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
             site_roster = roster_res.data
         except Exception as e:
@@ -517,7 +504,6 @@ elif page == "Admin Settings":
         else:
             roster_df = pd.DataFrame(site_roster)
             
-            # Formats structural columns safely for the UI
             required_cols = ['name', 'ncs_chit_number', 'emergency_name', 'emergency_phone', 'pickup_1_name', 'pickup_2_name', 'pickup_3_name']
             for col in required_cols:
                 if col not in roster_df.columns:
@@ -538,7 +524,6 @@ elif page == "Admin Settings":
             
             st.dataframe(display_roster, use_container_width=True, hide_index=True)
             
-            # Safe Archiving Interface instead of row deletion
             st.write("#### 📦 Archive Student Profile")
             child_to_archive = st.selectbox(
                 "Select child profile to archive (hides them from active check-in grids):", 
@@ -553,16 +538,14 @@ elif page == "Admin Settings":
                 
                 if st.button("Archive Profile", type="primary", disabled=not confirm_archive):
                     try:
-                        # Soft archive to toggle visibility without purging audit tracking
                         supabase.table("children").update({"is_active": False}).eq("name", child_to_archive).eq("location", sel_site).execute()
                         st.success(f"📦 {child_to_archive} has been safely archived. Profile hidden from live views.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Failed to archive child profile record: {e}")
                         
-        # --- 3. ARCHIVE AND COMPLIANCE NOTICE ---
         st.markdown("---")
-        st.info("🔒 **Data Retention Lock Active:** In accordance with Pobal and Tusla childcare regulations, permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
+        st.info("🔒 **Data Retention Lock Active:** Permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
 
 # --- 10. GLOBAL FALLBACK ---
 else:
