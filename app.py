@@ -489,26 +489,40 @@ elif page == "Admin Settings":
                 st.error("❌ Incorrect passcode. Management access denied.")
                 
     else:
-        # --- NEW ACCORDION TABS FOR EASY SCOPING ---
+        # --- ADMIN WORKSPACE TABS ---
         adm_tab1, adm_tab2 = st.tabs(["➕ Add New Child", "👥 Manage Active Roster"])
         
         # ----------------------------------------------------
-        # TAB 1: ADD NEW CHILD PROFILE FORM
+        # TAB 1: ADD NEW CHILD PROFILE FORM (UPGRADED)
         # ----------------------------------------------------
         with adm_tab1:
             st.subheader(f"➕ Register New Child to {sel_site}")
             st.caption("Onboard a new child profile directly into the active registration system roster.")
             
             with st.form("add_new_child_form", clear_on_submit=True):
-                new_name = st.text_input("Child's Full Name * (Must be Unique)")
-                new_chit = st.text_input("NCS CHIT Number")
+                # Core Info
+                col_info1, col_info2 = st.columns(2)
+                with col_info1:
+                    new_name = st.text_input("Child's Full Name * (Must be Unique)")
+                    new_chit = st.text_input("NCS CHIT Number")
+                with col_info2:
+                    new_dob = st.date_input("Date of Birth", value=None, min_value=datetime(2010, 1, 1), max_value=datetime.now())
+                    
+                # Health & Safeguarding Metrics
+                st.write("---")
+                st.caption("🩺 Health, Dietary & Safeguarding Requirements:")
+                dietary_notes = st.text_area("Dietary Requirements / Allergies", placeholder="List any food allergies, intolerances, or religious dietary restrictions (or leave blank if none)...")
+                medical_notes = st.text_area("Medical Notes & Conditions", placeholder="List any medical diagnoses, inhalers, regular medications, or special needs (or leave blank if none)...")
                 
+                # Contacts
+                st.write("---")
+                st.caption("🚨 Emergency Contact Framework:")
                 c_a, c_b = st.columns(2)
                 e_name = c_a.text_input("Primary Emergency Contact Name")
                 e_phone = c_b.text_input("Primary Emergency Contact Phone")
                 
                 st.write("---")
-                st.caption("Authorized Pickup Personnel Slots:")
+                st.caption("🚗 Authorized Pickup Personnel Slots:")
                 p1_n = st.text_input("Pickup Contact 1 Name")
                 p1_p = st.text_input("Pickup Contact 1 Phone")
                 
@@ -525,10 +539,16 @@ elif page == "Admin Settings":
                         st.error("❌ Missing Field: You must specify a Child Name to create a database profile.")
                     else:
                         try:
+                            # Convert date object safely to text for SQL insertion
+                            dob_str = str(new_dob) if new_dob else None
+                            
                             supabase.table("children").insert({
                                 "name": new_name.strip(),
                                 "location": sel_site,
                                 "ncs_chit_number": new_chit.strip(),
+                                "date_of_birth": dob_str,
+                                "dietary_requirements": dietary_notes.strip() or "None",
+                                "medical_notes": medical_notes.strip() or "None",
                                 "emergency_name": e_name.strip() or "Not Listed",
                                 "emergency_phone": e_phone.strip() or "Not Listed",
                                 "pickup_1_name": p1_n.strip() or "Mom",
@@ -545,7 +565,7 @@ elif page == "Admin Settings":
                             st.error(f"Failed to save profile record to database: {db_err}")
 
         # ----------------------------------------------------
-        # TAB 2: ACTIVE ROSTER MANAGEMENT & ARCHIVING
+        # TAB 2: ACTIVE ROSTER MANAGEMENT & ARCHIVING (UPGRADED)
         # ----------------------------------------------------
         with adm_tab2:
             st.subheader(f"👥 Current Active Roster ({sel_site})")
@@ -563,17 +583,26 @@ elif page == "Admin Settings":
             else:
                 roster_df = pd.DataFrame(site_roster)
                 
-                required_cols = ['name', 'ncs_chit_number', 'emergency_name', 'emergency_phone', 'pickup_1_name', 'pickup_2_name', 'pickup_3_name']
+                # Check column presence to prevent UI rendering dropouts
+                required_cols = [
+                    'name', 'ncs_chit_number', 'date_of_birth', 'dietary_requirements', 
+                    'medical_notes', 'emergency_name', 'emergency_phone', 
+                    'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
+                ]
                 for col in required_cols:
                     if col not in roster_df.columns:
                         roster_df[col] = "Not Listed"
                         
                 display_roster = roster_df[[
-                    'name', 'ncs_chit_number', 'emergency_name', 'emergency_phone', 
+                    'name', 'ncs_chit_number', 'date_of_birth', 'dietary_requirements', 
+                    'medical_notes', 'emergency_name', 'emergency_phone', 
                     'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
                 ]].rename(columns={
                     'name': 'Child Name',
                     'ncs_chit_number': 'NCS CHIT',
+                    'date_of_birth': 'DOB',
+                    'dietary_requirements': 'Dietary Notes',
+                    'medical_notes': 'Medical Notes',
                     'emergency_name': 'Emergency Contact',
                     'emergency_phone': 'Emergency Phone',
                     'pickup_1_name': 'Pickup 1',
