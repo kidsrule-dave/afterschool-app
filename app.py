@@ -403,6 +403,7 @@ elif page == "NCS Compliance":
     st.caption(f"Audit-ready statutory compliance intelligence engine for **{sel_site}**.")
     
     try:
+        # Fetch finalized attendance records
         compliance_res = (
             supabase.table("attendance")
             .select("date", "name", "session_type", "check_in", "check_out", "collected_by", "calculated_hours")
@@ -412,12 +413,14 @@ elif page == "NCS Compliance":
             .execute()
         )
         compliance_data = compliance_res.data
-        bookings_res = supabase.table("weekly_bookings").select("child_name", "day_of_week", "breakfast_club", "afterschool").eq("location", sel_site).execute()
-        bookings_data = bookings_res.data
+        
+        # UPGRADED: Pull official children registration metadata to access ncs_funded_hours
+        children_meta_res = supabase.table("children").select("name", "ncs_funded_hours").eq("location", sel_site).execute()
+        children_meta_data = children_meta_res.data
     except Exception as e:
-        st.error(f"Failed to fetch compliance or booking logs: {e}")
+        st.error(f"Failed to fetch compliance logs or master roster limits: {e}")
         compliance_data = []
-        bookings_data = []
+        children_meta_data = []
         
     if not compliance_data:
         st.info(f"No completed checkout logs available for {sel_site} to compile compliance metrics.")
@@ -464,30 +467,65 @@ elif page == "NCS Compliance":
             csv_r4 = df_r4.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Collector Log (CSV)", data=csv_r4, file_name=f"ncs_collectors_{sel_site.lower()}.csv", mime="text/csv", key="dl_r4")
 
+        # ----------------------------------------------------------------------
+        # UPGRADED REPORT 5: ACCURATE SHORTFALL AUDIT BASED ON CHIT ENTRIES
+        # ----------------------------------------------------------------------
         with rep_tab5:
             st.subheader("📉 NCS Unused Hours & Shortfall Audit")
-            if not bookings_data:
-                st.info("No schedule templates logged in the Weekly Planner.")
+            st.caption("Evaluates actual weekly usage margins against CHIT awarded fund caps.")
+            
+            if not children_meta_data:
+                st.info("No child profile data exists to compile audit bounds.")
             else:
-                booking_list = []
-                for b in bookings_data:
-                    allocated_hrs = 0
-                    if b.get("breakfast_club"): allocated_hrs += 1
-                    if b.get("afterschool"): allocated_hrs += 3
-                    booking_list.append({"name": b["child_name"], "allocated_hours": allocated_hrs})
-                df_bookings = pd.DataFrame(booking_list)
-                df_allocated_sum = df_bookings.groupby("name")["allocated_hours"].sum().reset_index()
-                df_allocated_sum.columns = ["Child Name", "Weekly Booked Hours"]
+                # 1. Convert master profiles containing ncs_funded_hours into a mapping frame
+                df_meta = pd.DataFrame(children_meta_data).rename(columns={"name": "Child Name", "ncs_funded_hours": "NCS Awarded Hours"})
+                
+                # 2. Extract average weekly attended hours from the permanent logs
                 df_calc = df.copy()
                 df_calc["date_parsed"] = pd.to_datetime(df_calc["date"])
                 df_calc["year_week"] = df_calc["date_parsed"].dt.strftime("%Y-%U")
+                
+                # Sum hours up by student for individual calendar weeks
                 df_weekly_attendance = df_calc.groupby(["name", "year_week"])["calculated_hours"].sum().reset_index()
+                
+                # Find the running historical average per student
                 df_avg_actual = df_weekly_attendance.groupby("name")["calculated_hours"].mean().reset_index()
                 df_avg_actual.columns = ["Child Name", "Avg Weekly Attended Hours"]
-                df_unused_report = pd.merge(df_allocated_sum, df_avg_actual, on="Child Name", how="left").fillna(0)
-                df_unused_report["Unused Hours Variance"] = (df_unused_report["Weekly Booked Hours"] - df_unused_report["Avg Weekly Attended Hours"]).apply(lambda x: max(0.0, round(x, 1)))
-                df_unused_report["Pobal Audit Status"] = df_unused_report["Unused Hours Variance"].apply(lambda x: "🚨 FLAG: Variance > 8 Hours" if x >= 8.0 else "🟢 Compliant")
-                st.dataframe(df_unused_report, use_container_width=True)
+                df_avg_actual["Avg Weekly Attended Hours"] = df_avg_actual["Avg Weekly Attended Hours"].round(1)
+                
+                # 3. Merge baseline CHIT targets with real attendance calculations
+                df_unused_report = pd.merge(df_meta, df_avg_actual, on="Child Name", how="inner")
+                
+                # Calculate accurate variance shortfall
+                df_unused_report["Unused Hours Variance"] = df_unused_report["NCS Awarded Hours"] - df_unused_report["Avg Weekly Attended Hours"]
+                df_unused_report["Unused Hours Variance"] = df_unused_report["Unused Hours Variance"].apply(lambda x: max(0.0, round(x, 1)))
+                
+                # Apply precise regulatory Pobal threshold alerts
+                df_unused_report["Pobal Audit Status"] = df_unused_report["Unused Hours Variance"].apply(
+                    lambda x: "🚨 FLAG: Variance > 8 Hours" if x >= 8.0 else "🟢 Compliant"
+                )
+                
+                # Rank at-risk profiles to the very top
+                df_unused_report = df_unused_report.sort_values(by="Unused Hours Variance", ascending=False)
+                
+                # Highlight rows where leakage exceeds the strict statutory 8-hour gap
+                def highlight_pobal_flags(row):
+                    if "🚨" in str(row["Pobal Audit Status"]):
+                        return ['background-color: rgba(255, 75, 75, 0.2)'] * len(row)
+                    return [''] * len(row)
+                
+                styled_df = df_unused_report.style.apply(highlight_pobal_flags, axis=1)
+                st.dataframe(styled_df, use_container_width=True)
+                
+                # Display direct error banner summaries for the onsite manager
+                flagged_count = len(df_unused_report[df_unused_report["Unused Hours Variance"] >= 8.0])
+                if flagged_count > 0:
+                    st.error(f"⚠️ **Pobal Compliance Alert:** There are **{flagged_count} child profile(s)** trending a running weekly variance shortfall above 8 hours. Adjust allocations on the Hive to protect funding balances.")
+                else:
+                    st.success("✅ **Pobal Compliance Check:** All active children are currently within safe attendance tolerance margins.")
+                
+                csv_r5 = df_unused_report.to_csv(index=False).encode('utf-8')
+                st.download_button("📥 Download Unused Hours Audit (CSV)", data=csv_r5, file_name=f"ncs_pobal_flags_{sel_site.lower()}.csv", mime="text/csv", key="dl_r5")
 # --- 9. ADMIN SETTINGS ---
 elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
