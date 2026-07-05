@@ -527,6 +527,8 @@ elif page == "Admin Settings":
                     new_chit = st.text_input("NCS CHIT Number")
                 with col_info2:
                     new_dob = st.date_input("Date of Birth", value=None, min_value=datetime(2010, 1, 1), max_value=datetime.now())
+                    # ADDED: Numeric entry for NCS officially awarded hours
+                    ncs_hours = st.number_input("NCS Funded Hours per Week *", min_value=0.0, max_value=50.0, value=0.0, step=0.5, help="Enter the total weekly hours awarded on the CHIT/Hive allocation.")
                     
                 # Health & Safeguarding Metrics
                 st.write("---")
@@ -566,6 +568,7 @@ elif page == "Admin Settings":
                                 "name": new_name.strip(),
                                 "location": sel_site,
                                 "ncs_chit_number": new_chit.strip(),
+                                "ncs_funded_hours": float(ncs_hours), # SAVED: Injected numerical input into data stream
                                 "date_of_birth": dob_str,
                                 "dietary_requirements": dietary_notes.strip() or "None",
                                 "medical_notes": medical_notes.strip() or "None",
@@ -585,7 +588,7 @@ elif page == "Admin Settings":
                             st.error(f"Failed to save profile record to database: {db_err}")
 
         # ----------------------------------------------------
-        # TAB 2: ACTIVE ROSTER MANAGEMENT & ARCHIVING (UPGRADED)
+        # TAB 2: ACTIVE ROSTER MANAGEMENT & ARCHIVING
         # ----------------------------------------------------
         with adm_tab2:
             st.subheader(f"👥 Current Active Roster ({sel_site})")
@@ -605,21 +608,22 @@ elif page == "Admin Settings":
                 
                 # Check column presence to prevent UI rendering dropouts
                 required_cols = [
-                    'name', 'ncs_chit_number', 'date_of_birth', 'dietary_requirements', 
+                    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
                     'medical_notes', 'emergency_name', 'emergency_phone', 
                     'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
                 ]
                 for col in required_cols:
                     if col not in roster_df.columns:
-                        roster_df[col] = "Not Listed"
+                        roster_df[col] = 0.0 if col == 'ncs_funded_hours' else "Not Listed"
                         
                 display_roster = roster_df[[
-                    'name', 'ncs_chit_number', 'date_of_birth', 'dietary_requirements', 
+                    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
                     'medical_notes', 'emergency_name', 'emergency_phone', 
                     'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
                 ]].rename(columns={
                     'name': 'Child Name',
                     'ncs_chit_number': 'NCS CHIT',
+                    'ncs_funded_hours': 'Funded Hrs/Wk', # UPDATED: Included inside display data grid
                     'date_of_birth': 'DOB',
                     'dietary_requirements': 'Dietary Notes',
                     'medical_notes': 'Medical Notes',
@@ -654,6 +658,7 @@ elif page == "Admin Settings":
                             
         st.markdown("---")
         st.info("🔒 **Data Retention Lock Active:** Permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
+
 
 # --- 10. GLOBAL FALLBACK ---
 else:
