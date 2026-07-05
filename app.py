@@ -187,12 +187,13 @@ elif page == "Quick-Tap Board":
                     st.write(f"🎒 *In since {selected_log['check_in']} ({selected_log.get('session_type', 'Afterschool')})*")
                     st.warning(f"🚨 **Emergency Contact:** {e_name} — {e_phone}")
                     
-                    st.write("Select Collector:")
+                    st.write("### Choose Authorized Collector:")
                     p_cols = st.columns(4)
-                    pickups_options = [p1_name, p2_name, p3_name, "Other"]
-                    for idx_p, p in enumerate(pickups_options):
-                        with p_cols[idx_p]:
-                            if st.button(p, key=f"p_btn_{idx_p}_{active_id}", use_container_width=True):
+                    pickups = [p1_name, p2_name, p3_name, "Other / Parent"]
+                    
+                    for p_idx, p in enumerate(pickups):
+                        with p_cols[p_idx]:
+                            if st.button(p, key=f"p_btn_{p_idx}_{active_id}", use_container_width=True):
                                 st.session_state[c_key] = p
                                 st.rerun()
                     
@@ -217,21 +218,22 @@ elif page == "Quick-Tap Board":
                             if confirm_btn:
                                 now_time = datetime.now().strftime("%H:%M:%S")
                                 calculated_hours = ncs_round(selected_log['check_in'], now_time)
-                            try:
-                                supabase.table("attendance").update({
-                                    "check_out": now_time,
-                                    "collected_by": current_collector,
-                                    "calculated_hours": calculated_hours
-                                }).eq("id", active_id).execute()
                                 
-                                st.success(f"🎒 {selected_log['name']} successfully signed out at {now_time}!")
-                                
-                                if active_child_key in st.session_state:
-                                    del st.session_state[active_child_key]
-                                if c_key in st.session_state:
-                                    del st.session_state[c_key]
+                                try:
+                                    supabase.table("attendance").update({
+                                        "check_out": now_time,
+                                        "collected_by": current_collector,
+                                        "calculated_hours": calculated_hours
+                                    }).eq("id", active_id).execute()
                                     
-                                st.rerun()
+                                    st.success(f"🎒 {selected_log['name']} successfully signed out at {now_time}!")
+                                    
+                                    if active_child_key in st.session_state:
+                                        del st.session_state[active_child_key]
+                                    if c_key in st.session_state:
+                                        del st.session_state[c_key]
+                                        
+                                    st.rerun()
                                 except Exception as e:
                                     st.error(f"Failed to submit sign-out: {e}")
                     else:
