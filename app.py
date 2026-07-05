@@ -124,11 +124,13 @@ elif page == "Quick-Tap Board":
     st.caption("Tap a child's name to select who is collecting them.")
     
     try:
+        # UPGRADED: Pulling dietary_requirements and medical_notes from the database table
         children_res = supabase.table("children").select(
             "name", "emergency_name", "emergency_phone",
             "pickup_1_name", "pickup_1_phone",
             "pickup_2_name", "pickup_2_phone",
-            "pickup_3_name", "pickup_3_phone"
+            "pickup_3_name", "pickup_3_phone",
+            "dietary_requirements", "medical_notes"
         ).eq("location", sel_site).execute()
         child_lookup = {c['name']: c for c in children_res.data}
         
@@ -150,12 +152,20 @@ elif page == "Quick-Tap Board":
             child_name = log['name']
             session_type = log.get('session_type', 'Afterschool')
             
+            # Fetch medical fields for alert status flags
+            meta = child_lookup.get(child_name, {})
+            has_dietary = meta.get("dietary_requirements") and meta.get("dietary_requirements") != "None"
+            has_medical = meta.get("medical_notes") and meta.get("medical_notes") != "None"
+            
+            # Append visual warning badge directly to button text if records exist
+            badge = " ⚠️" if (has_dietary or has_medical) else ""
+            
             active_child_key = "active_tap_child_id"
             is_active = st.session_state.get(active_child_key) == child_id
             b_style = "primary" if is_active else "secondary"
             
             with grid_cols[idx % 3]:
-                label = f"🌅 {child_name} (BC)" if session_type == "Breakfast Club" else f"👦 {child_name} (AS)"
+                label = f"🌅 {child_name}{badge} (BC)" if session_type == "Breakfast Club" else f"👦 {child_name}{badge} (AS)"
                 if st.button(label, key=f"name_btn_{child_id}", type=b_style, use_container_width=True):
                     st.session_state[active_child_key] = child_id
                     st.rerun()
@@ -185,6 +195,18 @@ elif page == "Quick-Tap Board":
                 with st.container(border=True):
                     st.subheader(f"🔑 Sign-Out: {selected_log['name']}")
                     st.write(f"🎒 *In since {selected_log['check_in']} ({selected_log.get('session_type', 'Afterschool')})*")
+                    
+                    # --- CRITICAL MEDICAL/DIETARY ALERT BANNER IN SIGN-OUT WINDOW ---
+                    d_notes = meta.get("dietary_requirements", "None")
+                    m_notes = meta.get("medical_notes", "None")
+                    if d_notes != "None" or m_notes != "None":
+                        with st.error_ Mor():
+                            st.markdown("### 🚨 Critical Profile Care Alert")
+                            if d_notes != "None":
+                                st.markdown(f"🥦 **Dietary/Allergies:** {d_notes}")
+                            if m_notes != "None":
+                                st.markdown(f"🩺 **Medical Conditions:** {m_notes}")
+                    
                     st.warning(f"🚨 **Emergency Contact:** {e_name} — {e_phone}")
                     
                     st.write("### Choose Authorized Collector:")
@@ -238,7 +260,6 @@ elif page == "Quick-Tap Board":
                                     st.error(f"Failed to submit sign-out: {e}")
                     else:
                         st.info("💡 Please tap one of the names above to select the collector.")
-
 # --- 7. ATTENDANCE ---
 elif page == "Attendance":
     st.title("📋 Live Site Attendance Feed")
