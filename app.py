@@ -217,7 +217,7 @@ elif page == "Quick-Tap Board":
                             if confirm_btn:
                                 now_time = datetime.now().strftime("%H:%M:%S")
                                 calculated_hours = ncs_round(selected_log['check_in'], now_time)
- try:
+                            try:
                                 supabase.table("attendance").update({
                                     "check_out": now_time,
                                     "collected_by": current_collector,
@@ -232,10 +232,11 @@ elif page == "Quick-Tap Board":
                                     del st.session_state[c_key]
                                     
                                 st.rerun()
-                            except Exception as e:
-                                st.error(f"Failed to submit sign-out: {e}")
-            else:
-                st.info("💡 Please tap one of the names above to select the collector.")                                
+                                except Exception as e:
+                                    st.error(f"Failed to submit sign-out: {e}")
+                    else:
+                        st.info("💡 Please tap one of the names above to select the collector.")
+
 # --- 7. ATTENDANCE ---
 elif page == "Attendance":
     st.title("📋 Live Site Attendance Feed")
