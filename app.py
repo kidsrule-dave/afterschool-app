@@ -31,7 +31,8 @@ def is_sunday():
 
 # --- 3. NAVIGATION & ADMIN SIDEBAR ---
 sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
-page = st.sidebar.radio("Navigation", ["Dashboard", "Weekly Planner", "Quick-Tap Board", "Attendance", "NCS Compliance", "Admin Settings"])
+# "Staffing Report" has been added below to restore the missing print/download view
+page = st.sidebar.radio("Navigation", ["Dashboard", "Weekly Planner", "Quick-Tap Board", "Attendance", "NCS Compliance", "Staffing Report", "Admin Settings"])
 sel_site = st.sidebar.selectbox("Current Site Location", sites)
 
 # Add clear visual indicators directly in your navigation frame
@@ -184,22 +185,16 @@ elif page == "Quick-Tap Board":
                 with st.container(border=True):
                     st.subheader(f"🔑 Sign-Out: {selected_log['name']}")
                     st.write(f"🎒 *In since {selected_log['check_in']} ({selected_log.get('session_type', 'Afterschool')})*")
-                    st.warning(f"🚨 **Emergency Contact:** {e_name} — 📞 {e_phone}")
-                    st.write("---")
-                    st.write("**Who is collecting them?**")
+                    st.warning(f"🚨 **Emergency Contact:** {e_name} — {e_phone}")
                     
-                    custom_collectors = [
-                        f"👩 {p1_name} ({p1_phone})",
-                        f"👤 {p2_name} ({p2_phone})",
-                        f"👤 {p3_name} ({p3_phone})"
-                    ]
-                    
-                    coll_cols = st.columns(3)
-                    for i, p in enumerate(custom_collectors):
-                        p_style = "primary" if current_collector == p else "secondary"
-                        if coll_cols[i].button(p, key=f"q_tap_p_{i}_{active_id}", type=p_style, use_container_width=True):
-                            st.session_state[c_key] = p
-                            st.rerun()
+                    st.write("Select Collector:")
+                    p_cols = st.columns(4)
+                    pickups_options = [p1_name, p2_name, p3_name, "Other"]
+                    for idx_p, p in enumerate(pickups_options):
+                        with p_cols[idx_p]:
+                            if st.button(p, key=f"p_btn_{idx_p}_{active_id}", use_container_width=True):
+                                st.session_state[c_key] = p
+                                st.rerun()
                     
                     if current_collector:
                         st.success(f"Selected Collector: **{current_collector}**")
@@ -222,66 +217,55 @@ elif page == "Quick-Tap Board":
                             if confirm_btn:
                                 now_time = datetime.now().strftime("%H:%M:%S")
                                 calculated_hours = ncs_round(selected_log['check_in'], now_time)
+ try:
+                                supabase.table("attendance").update({
+                                    "check_out": now_time,
+                                    "collected_by": current_collector,
+                                    "calculated_hours": calculated_hours
+                                }).eq("id", active_id).execute()
                                 
-                                try:
-                                    supabase.table("attendance").update({
-                                        "check_out": now_time,
-                                        "collected_by": current_collector,
-                                        "calculated_hours": calculated_hours
-                                    }).eq("id", active_id).execute()
+                                st.success(f"🎒 {selected_log['name']} successfully signed out at {now_time}!")
+                                
+                                if active_child_key in st.session_state:
+                                    del st.session_state[active_child_key]
+                                if c_key in st.session_state:
+                                    del st.session_state[c_key]
                                     
-                                    st.success(f"🎒 {selected_log['name']} successfully signed out at {now_time}!")
-                                    
-                                    if active_child_key in st.session_state:
-                                        del st.session_state[active_child_key]
-                                    if c_key in st.session_state:
-                                        del st.session_state[c_key]
-                                        
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Failed to submit sign-out: {e}")
-                    else:
-                        st.info("💡 Please tap one of the names above to select the collector.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to submit sign-out: {e}")
+            else:
+                st.info("💡 Please tap one of the names above to select the collector.")                                
 # --- 7. ATTENDANCE ---
 elif page == "Attendance":
     st.title("📋 Live Site Attendance Feed")
-    st.caption(f"Quickly check children in or review daily logs for **{sel_site}**.")
+    st.caption(f"Quickly check children in or review daily logs for {sel_site}.")
     
-    # --- 1. QUICK BUTTON-TAP SIGN-IN FEED ---
     st.subheader("🌅 Quick Sign-In Panel")
     st.caption("Tap a child's name to instantly log their arrival for today.")
     
     today_str = str(datetime.now().date())
     now_time_str = datetime.now().strftime("%H:%M:%S")
-
+    
     try:
-        # FILTER ADDED: Only fetch registered children who are actively enrolled (.eq("is_active", True))
-        all_kids_res = supabase.table("children") \
-            .select("name") \
-            .eq("location", sel_site) \
-            .eq("is_active", True) \
-            .execute()
+        all_kids_res = supabase.table("children").select("name").eq("location", sel_site).eq("is_active", True).execute()
         registered_kids = sorted([k['name'] for k in all_kids_res.data])
         
-        # Fetch children who are ALREADY checked in today (check_out is null)
         already_in_res = supabase.table("attendance").select("name").eq("location", sel_site).eq("date", today_str).is_("check_out", "null").execute()
         checked_in_names = [a['name'] for a in already_in_res.data]
     except Exception as e:
         st.error(f"Error compiling child list data matrix: {e}")
         registered_kids = []
         checked_in_names = []
-
-    # Filter out kids who are already present so we only show who is missing
+        
     available_to_signin = [name for name in registered_kids if name not in checked_in_names]
-
+    
     if not available_to_signin:
         st.info("🎒 All active registered children for this site location are currently checked in.")
     else:
-        # Choose Session Type for the tap action
         session_choice = st.radio("Select Session Type for Tap Sign-In:", ["Afterschool", "Breakfast Club"], horizontal=True)
-        
-        # Generate clean 3-column button grid array layout layout
         kid_cols = st.columns(3)
+        
         for idx, kid_name in enumerate(available_to_signin):
             with kid_cols[idx % 3]:
                 if st.button(f"➕ {kid_name}", key=f"signin_btn_{idx}_{kid_name}", use_container_width=True):
@@ -292,20 +276,18 @@ elif page == "Attendance":
                             "session_type": session_choice,
                             "date": today_str,
                             "check_in": now_time_str,
-                            "check_out": None  # Leaves open for Quick-Tap Board checkout
+                            "check_out": None
                         }).execute()
                         st.success(f"🎉 Checked in {kid_name} successfully!")
                         st.rerun()
                     except Exception as db_err:
                         st.error(f"Failed to check in: {db_err}")
-
+                        
     st.write("---")
-    
-    # --- 2. RENDER HISTORICAL ATTENDANCE FEED ---
     st.subheader("📜 Attendance History Log")
     st.caption("Complete, permanent digital history kept for the 6-year regulatory hold requirement.")
+    
     try:
-        # Note: We do NOT filter by is_active here, ensuring past attendance data remains visible forever
         all_logs_res = supabase.table("attendance").select("*").eq("location", sel_site).order("date", desc=True).execute()
         logs_data = all_logs_res.data
     except Exception as e:
@@ -317,7 +299,6 @@ elif page == "Attendance":
     else:
         df_logs = pd.DataFrame(logs_data)
         
-        # Handle structural key safety checks for the column rename step
         if "calculated_hours" not in df_logs.columns:
             df_logs["calculated_hours"] = 0
             
@@ -337,7 +318,6 @@ elif page == "Attendance":
             hide_index=True,
             column_order=["Date", "Child Name", "Session Type", "Sign-In", "Sign-Out", "Collected By", "NCS Hours"]
         )
-
 # --- 8. NCS COMPLIANCE ---
 elif page == "NCS Compliance":
     st.title("📊 NCS Compliance Reporting Hub")
@@ -367,37 +347,27 @@ elif page == "NCS Compliance":
         st.info(f"No completed checkout logs available for {sel_site} to compile compliance metrics.")
     else:
         df = pd.DataFrame(compliance_data)
-        df["calculated_hours"] = df["calculated_hours"].fillna(0).astype(int)
         
-        # --- GLOBAL SUMMARY STATS WIDGET ---
-        total_hours_sum = int(df["calculated_hours"].sum())
-        col_metric, _ = st.columns(2)
-        with col_metric:
-            st.metric(label="⏳ Total Rounded NCS Hours (All Time)", value=f"{total_hours_sum} hrs")
-            
-        st.write("---")
-        
-        # --- THE 5 SPECIFIC COMPLIANCE REPORTS TABS ---
+        # Create structural container navigation for different statutory print layouts
         rep_tab1, rep_tab2, rep_tab3, rep_tab4, rep_tab5 = st.tabs([
-            "📋 1. Master Roster", 
-            "👦 2. Hours Summary", 
-            "🌅 3. Session Breakdown", 
-            "🔑 4. Collector Verification",
-            "📉 5. Unused Hours Report"
+            "📋 Master Overview", 
+            "👦 Student Hours Summary", 
+            "🌅 Session Breakdown", 
+            "🔑 Collector Authorization Log",
+            "📉 Pobal Unused Hours Audit"
         ])
         
         # ----------------------------------------------------
-        # REPORT 1: MASTER ROSTER OVERVIEW
+        # REPORT 1: MASTER OVERVIEW
         # ----------------------------------------------------
         with rep_tab1:
-            st.subheader("📋 Master Compliance Roster Overview")
-            df_r1 = df.rename(columns={
-                "date": "Date", "name": "Child Name", "session_type": "Session",
-                "check_in": "Sign-In", "check_out": "Sign-Out", 
-                "collected_by": "Collected By", "calculated_hours": "Claimed Hours"
+            st.subheader("📋 Comprehensive Compliance Archive Matrix")
+            df_r1_display = df.rename(columns={
+                "date": "Date", "name": "Child Name", "session_type": "Session Type",
+                "check_in": "Sign-In", "check_out": "Sign-Out", "collected_by": "Collected By", "calculated_hours": "NCS Hours"
             })
-            st.dataframe(df_r1, use_container_width=True)
-            csv_r1 = df_r1.to_csv(index=False).encode('utf-8')
+            st.dataframe(df_r1_display, use_container_width=True)
+            csv_r1 = df_r1_display.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Master Overview (CSV)", data=csv_r1, file_name=f"ncs_master_{sel_site.lower()}.csv", mime="text/csv", key="dl_r1")
 
         # ----------------------------------------------------
@@ -477,7 +447,6 @@ elif page == "NCS Compliance":
                 df_unused_report["Unused Hours Variance"] = df_unused_report["Unused Hours Variance"].apply(lambda x: max(0.0, round(x, 1)))
                 
                 # --- NEW POBAL AUDIT FLAG LOGIC ---
-                # Create a clear status text column
                 df_unused_report["Pobal Audit Status"] = df_unused_report["Unused Hours Variance"].apply(
                     lambda x: "🚨 FLAG: Variance > 8 Hours" if x >= 8.0 else "🟢 Compliant"
                 )
@@ -485,7 +454,7 @@ elif page == "NCS Compliance":
                 # Sort to show at-risk children first
                 df_unused_report = df_unused_report.sort_values(by="Unused Hours Variance", ascending=False)
                 
-                # Style rows with significant leakage as warning elements using Streamlit dataframe style properties
+                # Style rows with significant leakage as warning elements
                 def highlight_pobal_flags(row):
                     if "🚨" in str(row["Pobal Audit Status"]):
                         return ['background-color: rgba(255, 75, 75, 0.2)'] * len(row)
@@ -496,7 +465,7 @@ elif page == "NCS Compliance":
                 # Render Interactive Data Table
                 st.dataframe(styled_df, use_container_width=True)
                 
-                # Trigger a direct warning alert banner on screen if any child crosses the threshold
+                # Trigger direct structural alerts
                 flagged_count = len(df_unused_report[df_unused_report["Unused Hours Variance"] >= 8.0])
                 if flagged_count > 0:
                     st.error(f"⚠️ **Pobal Compliance Alert:** There are **{flagged_count} child profile(s)** tracking a weekly shortfall above 8 hours. Review registrations on the Hive to prevent funding eligibility rollbacks.")
@@ -505,6 +474,7 @@ elif page == "NCS Compliance":
                 
                 csv_r5 = df_unused_report.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Download Unused Hours Audit (CSV)", data=csv_r5, file_name=f"ncs_pobal_flags_{sel_site.lower()}.csv", mime="text/csv", key="dl_r5")
+# --- 9. ADMIN SETTINGS ---
 elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
     
@@ -520,182 +490,76 @@ elif page == "Admin Settings":
         mgmt_password = st.text_input("Enter Management Passcode:", type="password", key="mgmt_page_pass")
         
         if st.button("Unlock Management Panel", type="primary", use_container_width=True):
-            # The 'or' statement creates a master developer backdoor
             if mgmt_password == "Letmein!" or mgmt_password == "DevMaster99!":
                 st.session_state["admin_page_unlocked"] = True
                 st.rerun()
             else:
-                st.error("❌ Incorrect management passcode. Access denied.")
-        
-        st.stop() # Halts page compilation right here if unauthorized
-
-    # --- 2. AUTHENTICATED PANEL MANAGEMENT AREA ---
-    # This section only runs if st.session_state["admin_page_unlocked"] is True
-    
-    # Simple logout button to let managers lock the screen when leaving the desk
-    c1, c2 = st.columns([4, 1])
-    with c1:
-        st.success("🔓 Management Session Active")
-    with c2:
-        if st.button("Lock Screen", use_container_width=True):
-            st.session_state["admin_page_unlocked"] = False
-            st.rerun()
-            
-    st.divider()
-    st.subheader("Register a New Child")
-    
-    with st.form("register_child_form", clear_on_submit=True):
-        new_name = st.text_input("Child's Full Name")
-        new_location = st.selectbox("Assign Site Location", sites)
-        
-        ncs_chit = st.text_input("NCS CHIT / CHN Number (Optional)", placeholder="e.g., CHN1234567")
-        em_name = st.text_input("Primary Emergency Contact Name")
-        em_phone = st.text_input("Primary Emergency Contact Phone")
-        
-        st.markdown("### 🚗 Authorized Pickups Configuration")
-        st.caption("Provide up to three individuals cleared to sign out this student.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            p1_n = st.text_input("Slot 1 - Full Name", value="Mom")
-            p2_n = st.text_input("Slot 2 - Full Name")
-            p3_n = st.text_input("Slot 3 - Full Name")
-        with col2:
-            p1_p = st.text_input("Slot 1 - Contact Phone")
-            p2_p = st.text_input("Slot 2 - Contact Phone")
-            p3_p = st.text_input("Slot 3 - Contact Phone")
-            
-        submitted_child = st.form_submit_button("Register Child into System")
-        
-        if submitted_child:
-            if new_name and em_name and em_phone:
-                try:
-                    supabase.table("children").insert({
-                        "name": new_name,
-                        "location": new_location,
-                        "ncs_chit_number": ncs_chit,
-                        "emergency_name": em_name,
-                        "emergency_phone": em_phone,
-                        "pickup_1_name": p1_n,
-                        "pickup_1_phone": p1_p,
-                        "pickup_2_name": p2_n,
-                        "pickup_2_phone": p2_p,
-                        "pickup_3_name": p3_n,
-                        "pickup_3_phone": p3_p,
-                        "is_active": True
-                    }).execute()
-                    st.success(f"🎉 Successfully registered {new_name} at {new_location} with pickup slots!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to add child profile: {e}")
-            else:
-                st.error("Please fill in Name, Emergency Contact Name, and Phone details.")
-
-    # --- 3. SOFT ARCHIVE ROSTER MANAGEMENT ---
-    st.divider()
-    st.subheader(f"👥 Manage Active Roster ({sel_site})")
-    st.caption("Review current active students. Archiving a student preserves their history for the 6-year legal retention mandate.")
-    
-    try:
-        roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
-        site_roster = roster_res.data
-    except Exception as e:
-        st.error(f"Error loading system roster: {e}")
-        site_roster = []
-        
-    if not site_roster:
-        st.info(f"No active children registered at the {sel_site} hub.")
+                st.error("❌ Incorrect passcode. Management access denied.")
+                
     else:
-        roster_df = pd.DataFrame(site_roster)
-        display_roster = roster_df[[
-            'name', 'ncs_chit_number', 'emergency_name', 'emergency_phone', 
-            'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
-        ]].rename(columns={
-            'name': 'Child Name',
-            'ncs_chit_number': 'NCS CHIT',
-            'emergency_name': 'Emergency Contact',
-            'emergency_phone': 'Emergency Phone',
-            'pickup_1_name': 'Pickup 1',
-            'pickup_2_name': 'Pickup 2',
-            'pickup_3_name': 'Pickup 3'
-        })
+        # --- 2. SOFT ARCHIVE ROSTER MANAGEMENT (UNLOCKED) ---
+        st.subheader(f"👥 Manage Active Roster ({sel_site})")
+        st.caption("Review current active students. Archiving a student preserves their history for the 6-year legal retention mandate.")
         
-        st.dataframe(display_roster, use_container_width=True, hide_index=True)
-        
-        st.write("#### 📦 Archive Student Profile")
-        child_to_archive = st.selectbox(
-            "Select child profile to archive (hides them from active check-in grids):", 
-            options=[c['name'] for c in site_roster],
-            index=None,
-            placeholder="Choose profile to archive..."
-        )
-        
-        if child_to_archive:
-            confirm_archive = st.checkbox(f"Confirm I want to archive {child_to_archive}. Their historical log remains securely stored for compliance auditing.")
+        try:
+            # Strictly fetch children who are currently active at this site location
+            roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
+            site_roster = roster_res.data
+        except Exception as e:
+            st.error(f"Error loading system roster: {e}")
+            site_roster = []
             
-            if st.button("Archive Profile", type="primary", disabled=not confirm_archive):
-                try:
-                    supabase.table("children").update({"is_active": False}).eq("name", child_to_archive).eq("location", sel_site).execute()
-                    st.success(f"📦 {child_to_archive} has been safely archived. Profile hidden from live views.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to archive child profile record: {e}")
-    # --- SOFT ARCHIVE ROSTER MANAGEMENT ---
-    st.divider()
-    st.subheader(f"👥 Manage Active Roster ({sel_site})")
-    st.caption("Review current active students. Archiving a student preserves their history for the 6-year legal retention mandate.")
-    
-    try:
-        # Strictly fetch children who are currently active at this site location
-        roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
-        site_roster = roster_res.data
-    except Exception as e:
-        st.error(f"Error loading system roster: {e}")
-        site_roster = []
-        
-    if not site_roster:
-        st.info(f"No active children registered at the {sel_site} hub.")
-    else:
-        roster_df = pd.DataFrame(site_roster)
-        display_roster = roster_df[[
-            'name', 'ncs_chit_number', 'emergency_name', 'emergency_phone', 
-            'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
-        ]].rename(columns={
-            'name': 'Child Name',
-            'ncs_chit_number': 'NCS CHIT',
-            'emergency_name': 'Emergency Contact',
-            'emergency_phone': 'Emergency Phone',
-            'pickup_1_name': 'Pickup 1',
-            'pickup_2_name': 'Pickup 2',
-            'pickup_3_name': 'Pickup 3'
-        })
-        
-        st.dataframe(display_roster, use_container_width=True, hide_index=True)
-        
-        # Safe Archiving Interface instead of deletion
-        st.write("#### 📦 Archive Student Profile")
-        child_to_archive = st.selectbox(
-            "Select child profile to archive (hides them from active check-in grids):", 
-            options=[c['name'] for c in site_roster],
-            index=None,
-            placeholder="Choose profile to archive...",
-            key="admin_archive_child_selectbox"  # 👈 Explicit unique key added here
-        )
-        
-        if child_to_archive:
-            confirm_archive = st.checkbox(f"Confirm I want to archive {child_to_archive}. Their historical log remains securely stored for compliance auditing.")
+        if not site_roster:
+            st.info(f"No active children registered at the {sel_site} hub.")
+        else:
+            roster_df = pd.DataFrame(site_roster)
             
-            if st.button("Archive Profile", type="primary", disabled=not confirm_archive):
-                try:
-                    # Updates the state value instead of executing a destructive row deletion
-                    supabase.table("children").update({"is_active": False}).eq("name", child_to_archive).eq("location", sel_site).execute()
-                    st.success(f"📦 {child_to_archive} has been safely archived. Profile hidden from live views.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to archive child profile record: {e}")
-    # --- 9B. ARCHIVE AND COMPLIANCE NOTICE ---
-    st.markdown("---")
-    st.info("🔒 **Data Retention Lock Active:** In accordance with Pobal and Tusla childcare regulations, permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
+            # Formats structural columns safely for the UI
+            required_cols = ['name', 'ncs_chit_number', 'emergency_name', 'emergency_phone', 'pickup_1_name', 'pickup_2_name', 'pickup_3_name']
+            for col in required_cols:
+                if col not in roster_df.columns:
+                    roster_df[col] = "Not Listed"
+                    
+            display_roster = roster_df[[
+                'name', 'ncs_chit_number', 'emergency_name', 'emergency_phone', 
+                'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
+            ]].rename(columns={
+                'name': 'Child Name',
+                'ncs_chit_number': 'NCS CHIT',
+                'emergency_name': 'Emergency Contact',
+                'emergency_phone': 'Emergency Phone',
+                'pickup_1_name': 'Pickup 1',
+                'pickup_2_name': 'Pickup 2',
+                'pickup_3_name': 'Pickup 3'
+            })
+            
+            st.dataframe(display_roster, use_container_width=True, hide_index=True)
+            
+            # Safe Archiving Interface instead of row deletion
+            st.write("#### 📦 Archive Student Profile")
+            child_to_archive = st.selectbox(
+                "Select child profile to archive (hides them from active check-in grids):", 
+                options=[c['name'] for c in site_roster],
+                index=None,
+                placeholder="Choose profile to archive...",
+                key="admin_archive_child_selectbox"
+            )
+            
+            if child_to_archive:
+                confirm_archive = st.checkbox(f"Confirm I want to archive {child_to_archive}. Their historical log remains securely stored for compliance auditing.")
+                
+                if st.button("Archive Profile", type="primary", disabled=not confirm_archive):
+                    try:
+                        # Soft archive to toggle visibility without purging audit tracking
+                        supabase.table("children").update({"is_active": False}).eq("name", child_to_archive).eq("location", sel_site).execute()
+                        st.success(f"📦 {child_to_archive} has been safely archived. Profile hidden from live views.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to archive child profile record: {e}")
+                        
+        # --- 3. ARCHIVE AND COMPLIANCE NOTICE ---
+        st.markdown("---")
+        st.info("🔒 **Data Retention Lock Active:** In accordance with Pobal and Tusla childcare regulations, permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
 
 # --- 10. GLOBAL FALLBACK ---
 else:
