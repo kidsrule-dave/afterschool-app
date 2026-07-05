@@ -200,8 +200,7 @@ elif page == "Quick-Tap Board":
                     d_notes = meta.get("dietary_requirements", "None")
                     m_notes = meta.get("medical_notes", "None")
                     if d_notes != "None" or m_notes != "None":
-                        with st.error_ Mor():
-                            st.markdown("### 🚨 Critical Profile Care Alert")
+                        with st.expander("🚨 **Critical Profile Care Alert (Tap to View)**", expanded=True):
                             if d_notes != "None":
                                 st.markdown(f"🥦 **Dietary/Allergies:** {d_notes}")
                             if m_notes != "None":
