@@ -63,8 +63,8 @@ def generate_staffing_pdf(df_data, site_name, day_name):
     pdf.set_font("Helvetica", "I", 9)
     pdf.cell(0, 10, f"Generated automatically on: {datetime.now().strftime('%d-%b-%Y at %H:%M:%S')}", ln=True)
     
-    # Output file into a binary byte stream stream compatible with Streamlit download buttons
-    return pdf.output()
+    # 💥 FIXED: Explicitly convert the bytearray to immutable standard bytes structure
+    return bytes(pdf.output())
 # --- 3. NAVIGATION & ADMIN SIDEBAR ---
 sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
 # "Staffing Report" has been added below to restore the missing print/download view
