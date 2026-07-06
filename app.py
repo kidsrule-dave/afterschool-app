@@ -727,24 +727,27 @@ def clean_and_format_dob(val):
 # Apply the conversion to the date_of_birth column before creating display_roster
 roster_df['date_of_birth'] = roster_df['date_of_birth'].apply(clean_and_format_dob)
 
-# Now display the roster safely
-display_roster = roster_df[[
-    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
-    'medical_notes', 'emergency_name', 'emergency_phone', 
-    'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
-]].rename(columns={
-    'name': 'Child Name',
-    'ncs_chit_number': 'NCS CHIT',
-    'ncs_funded_hours': 'Funded Hrs/Wk',
-    'date_of_birth': 'DOB', # This will now instantly show as dd/mm/yyyy
-    'dietary_requirements': 'Dietary Notes',
-    'medical_notes': 'Medical Notes',
-    'emergency_name': 'Emergency Contact',
-    'emergency_phone': 'Emergency Phone',
-    'pickup_1_name': 'Pickup 1',
-    'pickup_2_name': 'Pickup 2',
-    'pickup_3_name': 'Pickup 3'
-})
+                # Apply the conversion to the date_of_birth column before creating display_roster
+                roster_df['date_of_birth'] = roster_df['date_of_birth'].apply(clean_and_format_dob)
+
+                # Now display the roster safely
+                display_roster = roster_df[[
+                    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
+                    'medical_notes', 'emergency_name', 'emergency_phone', 
+                    'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
+                ]].rename(columns={
+                    'name': 'Child Name',
+                    'ncs_chit_number': 'NCS CHIT',
+                    'ncs_funded_hours': 'Funded Hrs/Wk',
+                    'date_of_birth': 'DOB',
+                    'dietary_requirements': 'Dietary Notes',
+                    'medical_notes': 'Medical Notes',
+                    'emergency_name': 'Emergency Contact',
+                    'emergency_phone': 'Emergency Phone',
+                    'pickup_1_name': 'Pickup 1',
+                    'pickup_2_name': 'Pickup 2',
+                    'pickup_3_name': 'Pickup 3'
+                })
                 
                 st.dataframe(display_roster, use_container_width=True, hide_index=True)
                 
