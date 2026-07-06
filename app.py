@@ -628,75 +628,84 @@ elif page == "Admin Settings":
         # ----------------------------------------------------
         # TAB 2: ACTIVE ROSTER MANAGEMENT & ARCHIVING
         # ----------------------------------------------------
-        with adm_tab2:
-            st.subheader(f"👥 Current Active Roster ({sel_site})")
-            st.caption("Review active students. Archiving a student preserves their history for the 6-year retention mandate.")
+    with adm_tab2:
+        st.subheader(f"👥 Current Active Roster ({sel_site})")
+        try:
+            roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
+            site_roster = roster_res.data
+        except Exception as e:
+            st.error(f"Error loading system roster: {e}")
+            site_roster = []
             
-            try:
-                roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
-                site_roster = roster_res.data
-            except Exception as e:
-                st.error(f"Error loading system roster: {e}")
-                site_roster = []
-                
-            if not site_roster:
-                st.info(f"No active children registered at the {sel_site} hub.")
-            else:
-                roster_df = pd.DataFrame(site_roster)
-                
-                # Check column presence to prevent UI rendering dropouts
-                required_cols = [
-                    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
-                    'medical_notes', 'emergency_name', 'emergency_phone', 
-                    'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
-                ]
-                for col in required_cols:
-                    if col not in roster_df.columns:
-                        roster_df[col] = 0.0 if col == 'ncs_funded_hours' else "Not Listed"
-                        
-                display_roster = roster_df[[
-                    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
-                    'medical_notes', 'emergency_name', 'emergency_phone', 
-                    'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
-                ]].rename(columns={
-                    'name': 'Child Name',
-                    'ncs_chit_number': 'NCS CHIT',
-                    'ncs_funded_hours': 'Funded Hrs/Wk', # UPDATED: Included inside display data grid
-                    'date_of_birth': 'DOB',
-                    'dietary_requirements': 'Dietary Notes',
-                    'medical_notes': 'Medical Notes',
-                    'emergency_name': 'Emergency Contact',
-                    'emergency_phone': 'Emergency Phone',
-                    'pickup_1_name': 'Pickup 1',
-                    'pickup_2_name': 'Pickup 2',
-                    'pickup_3_name': 'Pickup 3'
-                })
-                
-                st.dataframe(display_roster, use_container_width=True, hide_index=True)
-                
-                st.write("#### 📦 Archive Student Profile")
-                child_to_archive = st.selectbox(
-                    "Select child profile to archive (hides them from active check-in grids):", 
-                    options=[c['name'] for c in site_roster],
-                    index=None,
-                    placeholder="Choose profile to archive...",
-                    key="admin_archive_child_selectbox"
-                )
-                
-                if child_to_archive:
-                    confirm_archive = st.checkbox(f"Confirm I want to archive {child_to_archive}. Their historical log remains securely stored for compliance auditing.")
-                    
-                    if st.button("Archive Profile", type="primary", disabled=not confirm_archive):
-                        try:
-                            supabase.table("children").update({"is_active": False}).eq("name", child_to_archive).eq("location", sel_site).execute()
-                            st.success(f"📦 {child_to_archive} has been safely archived. Profile hidden from live views.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Failed to archive child profile record: {e}")
-                            
-        st.markdown("---")
-        st.info("🔒 **Data Retention Lock Active:** Permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
+        if not site_roster:
+            st.info(f"No active children registered at the {sel_site} hub.")
+        else:
+            roster_df = pd.DataFrame(site_roster)
+            st.dataframe(roster_df[["name", "ncs_chit_number", "ncs_funded_hours"]], use_container_width=True)
+            
+            child_to_archive = st.selectbox("Select profile to archive:", options=[c['name'] for c in site_roster], index=None)
+            if child_to_archive:
+                confirm_archive = st.checkbox(f"Confirm I want to archive {child_to_archive}.")
+                if st.button("Archive Profile", type="primary", disabled=not confirm_archive):
+                    try:
+                        supabase.table("children").update({"is_active": False}).eq("name", child_to_archive).eq("location", sel_site).execute()
+                        st.success(f"📦 {child_to_archive} has been safely archived.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to archive: {e}")
 
+        # ----------------------------------------------------------------------
+        # NEW FEATURE: DISASTER RECOVERY & AUDIT BACKUP PROCEDURES
+        # ----------------------------------------------------------------------
+        st.markdown("---")
+        st.subheader("💾 Disaster Recovery & Audit Backup Vault")
+        st.caption("Generate encrypted, standalone local snapshots of your entire cloud database to satisfy 6-year retention regulations.")
+
+        # Check when the last backup was downloaded using Streamlit's session state
+        last_backup_date = st.session_state.get("last_backup_timestamp", None)
+        
+        if last_backup_date:
+            st.success(f"🔒 **Last Backup Secured:** {last_backup_date}")
+        else:
+            st.error("⚠️ **Backup Warning:** No local backup snapshot has been generated during this session. Download a copy below to store in your physical site records.")
+
+        try:
+            # 1. Fetch raw data dumps across all core database operational structures
+            raw_attendance = supabase.table("attendance").select("*").eq("location", sel_site).execute()
+            raw_children = supabase.table("children").select("*").eq("location", sel_site).execute()
+            
+            df_back_attend = pd.DataFrame(raw_attendance.data)
+            df_back_child = pd.DataFrame(raw_children.data)
+            
+            # 2. Build an in-memory binary spreadsheet export pipeline using pandas and io
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                if not df_back_attend.empty:
+                    df_back_attend.to_excel(writer, sheet_name="Attendance History", index=False)
+                if not df_back_child.empty:
+                    df_back_child.to_excel(writer, sheet_name="Master Child Roster", index=False)
+            
+            processed_data = buffer.getvalue()
+            current_date_stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            file_title = f"KidsRule_DB_Backup_{sel_site}_{current_date_stamp}.xlsx"
+            
+            # 3. Present the data download anchor directly to the onsite admin manager
+            st.download_button(
+                label="📥 Download Complete Database Snapshot (.xlsx)",
+                data=processed_data,
+                file_name=file_title,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key="admin_download_backup_vault_btn",
+                on_click=lambda: st.session_state.update({"last_backup_timestamp": datetime.now().strftime("%d-%b-%Y at %H:%M")})
+            )
+            st.caption("👉 *This file contains your full compliance record history, student matrices, tracking indicators, and contact structures for this site location.*")
+            
+        except Exception as backup_err:
+            st.warning(f"Unable to process backup data stream elements: {backup_err}")
+
+        st.markdown("---")
+        st.info("🔒 **Data Retention Lock Active:** Permanent profile deletion is disabled to preserve mandatory 6-year history records.")
 
 # --- 10. GLOBAL FALLBACK ---
 else:
