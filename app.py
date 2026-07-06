@@ -706,6 +706,24 @@ def clean_and_format_dob(val):
         # If any old custom string is there, just print it safely
         return val_str
 
+# --- FORCE THE TABLE TO RE-FORMAT ALL DATES IN THE UI ---
+def clean_and_format_dob(val):
+    val_str = str(val).strip()
+    if not val or pd.isna(val) or val_str in ["", "None", "Not Listed"]:
+        return "Not Listed"
+    try:
+        # If it's already in standard dd/mm/yyyy, keep it
+        if "/" in val_str and val_str.find("/") == 2:
+            return val_str
+        
+        # If it's stored as yyyy-mm-dd or yyyy/mm/dd, normalize and parse it
+        clean_date = val_str.replace("-", "/")
+        parsed_dt = datetime.strptime(clean_date, "%Y/%m/%d")
+        return parsed_dt.strftime("%d/%m/%Y")
+    except Exception:
+        # If any old custom string is there, print it safely
+        return val_str
+
 # Apply the conversion to the date_of_birth column before creating display_roster
 roster_df['date_of_birth'] = roster_df['date_of_birth'].apply(clean_and_format_dob)
 
@@ -771,6 +789,10 @@ display_roster = roster_df[[
             
             df_back_attend = pd.DataFrame(raw_attendance.data)
             df_back_child = pd.DataFrame(raw_children.data)
+            
+            # Formats the disaster recovery backup excel data too
+            if not df_back_child.empty and 'date_of_birth' in df_back_child.columns:
+                df_back_child['date_of_birth'] = df_back_child['date_of_birth'].apply(clean_and_format_dob)
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
