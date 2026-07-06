@@ -688,15 +688,44 @@ elif page == "Admin Settings":
                     if col not in roster_df.columns:
                         roster_df[col] = 0.0 if col == 'ncs_funded_hours' else "Not Listed"
                         
-                display_roster = roster_df[[
-                    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
-                    'medical_notes', 'emergency_name', 'emergency_phone', 
-                    'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
-                ]].rename(columns={
-                    'name': 'Child Name',
-                    'ncs_chit_number': 'NCS CHIT',
-                    'ncs_funded_hours': 'Funded Hrs/Wk', # UPDATED: Included inside display data grid
-                    'date_of_birth': 'DOB',
+def clean_and_format_dob(val):
+    val_str = str(val).strip()
+    if not val or pd.isna(val) or val_str in ["", "None", "Not Listed"]:
+        return "Not Listed"
+    try:
+        # If it's already in standard dd/mm/yyyy, keep it
+        if "/" in val_str and val_str.find("/") == 2:
+            return val_str
+        
+        # If it's stored as yyyy-mm-dd or yyyy/mm/dd, normalize and parse it
+        clean_date = val_str.replace("-", "/")
+        parsed_dt = datetime.strptime(clean_date, "%Y/%m/%d")
+        return parsed_dt.strftime("%d/%m/%Y")
+    except Exception:
+        # If any old custom string is there, just print it safely
+        return val_str
+
+# Apply the conversion to the date_of_birth column before creating display_roster
+roster_df['date_of_birth'] = roster_df['date_of_birth'].apply(clean_and_format_dob)
+
+# Now display the roster safely
+display_roster = roster_df[[
+    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
+    'medical_notes', 'emergency_name', 'emergency_phone', 
+    'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
+]].rename(columns={
+    'name': 'Child Name',
+    'ncs_chit_number': 'NCS CHIT',
+    'ncs_funded_hours': 'Funded Hrs/Wk',
+    'date_of_birth': 'DOB', # This will now instantly show as dd/mm/yyyy
+    'dietary_requirements': 'Dietary Notes',
+    'medical_notes': 'Medical Notes',
+    'emergency_name': 'Emergency Contact',
+    'emergency_phone': 'Emergency Phone',
+    'pickup_1_name': 'Pickup 1',
+    'pickup_2_name': 'Pickup 2',
+    'pickup_3_name': 'Pickup 3'
+})
                     'dietary_requirements': 'Dietary Notes',
                     'medical_notes': 'Medical Notes',
                     'emergency_name': 'Emergency Contact',
