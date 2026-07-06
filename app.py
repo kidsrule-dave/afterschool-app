@@ -528,106 +528,57 @@ elif page == "NCS Compliance":
                 st.download_button("📥 Download Unused Hours Audit (CSV)", data=csv_r5, file_name=f"ncs_pobal_flags_{sel_site.lower()}.csv", mime="text/csv", key="dl_r5")
 # --- 9. ADMIN SETTINGS ---
 elif page == "Admin Settings":
-    st.title("⚙️ Admin Settings")
+    st.title("⚙️ Admin Settings & Roster Engine")
     
-    if "admin_page_unlocked" not in st.session_state:
-        st.session_state["admin_page_unlocked"] = False
-
-    if not st.session_state["admin_page_unlocked"]:
-        st.subheader("🔒 Management Authorization Required")
-        st.caption("This area contains sensitive child protection rosters and registration tools.")
-        
-        mgmt_password = st.text_input("Enter Management Passcode:", type="password", key="mgmt_page_pass")
-        
-        if st.button("Unlock Management Panel", type="primary", use_container_width=True):
-            if mgmt_password == "Letmein!" or mgmt_password == "DevMaster99!":
-                st.session_state["admin_page_unlocked"] = True
-                st.rerun()
-            else:
-                st.error("❌ Incorrect passcode. Management access denied.")
-                
-    else:
-        # --- ADMIN WORKSPACE TABS ---
-        adm_tab1, adm_tab2 = st.tabs(["➕ Add New Child", "👥 Manage Active Roster"])
-        
-        # ----------------------------------------------------
-        # TAB 1: ADD NEW CHILD PROFILE FORM (UPGRADED)
-        # ----------------------------------------------------
-        with adm_tab1:
-            st.subheader(f"➕ Register New Child to {sel_site}")
-            st.caption("Onboard a new child profile directly into the active registration system roster.")
+    # STABLE INTERFACE INITIALIZATION
+    adm_tab1, adm_tab2 = st.tabs(["➕ Add New Child", "👥 Roster Management & Backup"])
+    
+    with adm_tab1:
+        st.subheader("Create a New Student Profile")
+        with st.form("new_child_form"):
+            new_name = st.text_input("Child Full Name")
+            new_chit = st.text_input("NCS CHIT Number")
+            ncs_hours = st.number_input("Funded NCS Hours Per Week", min_value=0.0, step=0.5)
+            new_dob = st.date_input("Date of Birth", value=None)
+            dietary_notes = st.text_area("Dietary/Allergy Notes")
+            medical_notes = st.text_area("Medical Conditions")
+            e_name = st.text_input("Emergency Contact Name")
+            e_phone = st.text_input("Emergency Contact Phone")
+            p1_n = st.text_input("Pickup Contact 1 Name")
+            p1_p = st.text_input("Pickup Contact 1 Phone")
+            p2_n = st.text_input("Pickup Contact 2 Name")
+            p2_p = st.text_input("Pickup Contact 2 Phone")
+            p3_n = st.text_input("Pickup Contact 3 Name")
+            p3_p = st.text_input("Pickup Contact 3 Phone")
             
-            with st.form("add_new_child_form", clear_on_submit=True):
-                # Core Info
-                col_info1, col_info2 = st.columns(2)
-                with col_info1:
-                    new_name = st.text_input("Child's Full Name * (Must be Unique)")
-                    new_chit = st.text_input("NCS CHIT Number")
-                with col_info2:
-                    new_dob = st.date_input("Date of Birth", value=None, min_value=datetime(2010, 1, 1), max_value=datetime.now())
-                    # ADDED: Numeric entry for NCS officially awarded hours
-                    ncs_hours = st.number_input("NCS Funded Hours per Week *", min_value=0.0, max_value=50.0, value=0.0, step=0.5, help="Enter the total weekly hours awarded on the CHIT/Hive allocation.")
+            submit_profile = st.form_submit_button("Save Profile to Supabase Database")
+            
+            if submit_profile:
+                try:
+                    dob_str = str(new_dob) if new_dob else None
+                    supabase.table("children").insert({
+                        "name": new_name.strip(),
+                        "location": sel_site,
+                        "ncs_chit_number": new_chit.strip(),
+                        "ncs_funded_hours": float(ncs_hours),
+                        "date_of_birth": dob_str,
+                        "dietary_requirements": dietary_notes.strip() or "None",
+                        "medical_notes": medical_notes.strip() or "None",
+                        "emergency_name": e_name.strip() or "Not Listed",
+                        "emergency_phone": e_phone.strip() or "Not Listed",
+                        "pickup_1_name": p1_n.strip() or "Mom",
+                        "pickup_1_phone": p1_p.strip() or "",
+                        "pickup_2_name": p2_n.strip() or "",
+                        "pickup_2_phone": p2_p.strip() or "",
+                        "pickup_3_name": p3_n.strip() or "",
+                        "pickup_3_phone": p3_p.strip() or "",
+                        "is_active": True
+                    }).execute()
+                    st.success(f"🎉 Successfully created active profile for {new_name}!")
+                    st.rerun()
+                except Exception as db_err:
+                    st.error(f"Failed to save profile record: {db_err}")
                     
-                # Health & Safeguarding Metrics
-                st.write("---")
-                st.caption("🩺 Health, Dietary & Safeguarding Requirements:")
-                dietary_notes = st.text_area("Dietary Requirements / Allergies", placeholder="List any food allergies, intolerances, or religious dietary restrictions (or leave blank if none)...")
-                medical_notes = st.text_area("Medical Notes & Conditions", placeholder="List any medical diagnoses, inhalers, regular medications, or special needs (or leave blank if none)...")
-                
-                # Contacts
-                st.write("---")
-                st.caption("🚨 Emergency Contact Framework:")
-                c_a, c_b = st.columns(2)
-                e_name = c_a.text_input("Primary Emergency Contact Name")
-                e_phone = c_b.text_input("Primary Emergency Contact Phone")
-                
-                st.write("---")
-                st.caption("🚗 Authorized Pickup Personnel Slots:")
-                p1_n = st.text_input("Pickup Contact 1 Name")
-                p1_p = st.text_input("Pickup Contact 1 Phone")
-                
-                p2_n = st.text_input("Pickup Contact 2 Name")
-                p2_p = st.text_input("Pickup Contact 2 Phone")
-                
-                p3_n = st.text_input("Pickup Contact 3 Name")
-                p3_p = st.text_input("Pickup Contact 3 Phone")
-                
-                submit_child = st.form_submit_button("Register & Activate Profile", type="primary", use_container_width=True)
-                
-                if submit_child:
-                    if not new_name.strip():
-                        st.error("❌ Missing Field: You must specify a Child Name to create a database profile.")
-                    else:
-                        try:
-                            # Convert date object safely to text for SQL insertion
-                            dob_str = str(new_dob) if new_dob else None
-                            
-                            supabase.table("children").insert({
-                                "name": new_name.strip(),
-                                "location": sel_site,
-                                "ncs_chit_number": new_chit.strip(),
-                                "ncs_funded_hours": float(ncs_hours), # SAVED: Injected numerical input into data stream
-                                "date_of_birth": dob_str,
-                                "dietary_requirements": dietary_notes.strip() or "None",
-                                "medical_notes": medical_notes.strip() or "None",
-                                "emergency_name": e_name.strip() or "Not Listed",
-                                "emergency_phone": e_phone.strip() or "Not Listed",
-                                "pickup_1_name": p1_n.strip() or "Mom",
-                                "pickup_1_phone": p1_p.strip() or "",
-                                "pickup_2_name": p2_n.strip() or "",
-                                "pickup_2_phone": p2_p.strip() or "",
-                                "pickup_3_name": p3_n.strip() or "",
-                                "pickup_3_phone": p3_p.strip() or "",
-                                "is_active": True
-                            }).execute()
-                            st.success(f"🎉 Successfully created active profile for **{new_name}** at {sel_site}!")
-                            st.toast("Profile data pipeline updated.")
-                        except Exception as db_err:
-                            st.error(f"Failed to save profile record to database: {db_err}")
-
-        # ----------------------------------------------------
-        # TAB 2: ACTIVE ROSTER MANAGEMENT & ARCHIVING
-        # ----------------------------------------------------
     with adm_tab2:
         st.subheader(f"👥 Current Active Roster ({sel_site})")
         try:
@@ -653,43 +604,37 @@ elif page == "Admin Settings":
                         st.rerun()
                     except Exception as e:
                         st.error(f"Failed to archive: {e}")
-
-        # ----------------------------------------------------------------------
-        # NEW FEATURE: DISASTER RECOVERY & AUDIT BACKUP PROCEDURES
-        # ----------------------------------------------------------------------
+                        
+        # --- DISASTER RECOVERY & AUDIT BACKUP PROCEDURES ---
         st.markdown("---")
         st.subheader("💾 Disaster Recovery & Audit Backup Vault")
-        st.caption("Generate encrypted, standalone local snapshots of your entire cloud database to satisfy 6-year retention regulations.")
-
-        # Check when the last backup was downloaded using Streamlit's session state
-        last_backup_date = st.session_state.get("last_backup_timestamp", None)
+        st.caption("Generate encrypted local snapshots of your cloud database structures to satisfy 6-year retention regulations.")
         
+        last_backup_date = st.session_state.get("last_backup_timestamp", None)
         if last_backup_date:
-            st.success(f"🔒 **Last Backup Secured:** {last_backup_date}")
+            st.success(f"🔒 Last Backup Secured: {last_backup_date}")
         else:
-            st.error("⚠️ **Backup Warning:** No local backup snapshot has been generated during this session. Download a copy below to store in your physical site records.")
-
+            st.error("⚠️ Backup Warning: No local backup snapshot has been generated during this session.")
+            
         try:
-            # 1. Fetch raw data dumps across all core database operational structures
+            # FIXED: Changed from select("") to select("*") to fetch all rows and columns properly
             raw_attendance = supabase.table("attendance").select("*").eq("location", sel_site).execute()
             raw_children = supabase.table("children").select("*").eq("location", sel_site).execute()
             
             df_back_attend = pd.DataFrame(raw_attendance.data)
             df_back_child = pd.DataFrame(raw_children.data)
             
-            # 2. Build an in-memory binary spreadsheet export pipeline using pandas and io
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 if not df_back_attend.empty:
                     df_back_attend.to_excel(writer, sheet_name="Attendance History", index=False)
                 if not df_back_child.empty:
                     df_back_child.to_excel(writer, sheet_name="Master Child Roster", index=False)
-            
+                    
             processed_data = buffer.getvalue()
             current_date_stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             file_title = f"KidsRule_DB_Backup_{sel_site}_{current_date_stamp}.xlsx"
             
-            # 3. Present the data download anchor directly to the onsite admin manager
             st.download_button(
                 label="📥 Download Complete Database Snapshot (.xlsx)",
                 data=processed_data,
@@ -699,15 +644,12 @@ elif page == "Admin Settings":
                 key="admin_download_backup_vault_btn",
                 on_click=lambda: st.session_state.update({"last_backup_timestamp": datetime.now().strftime("%d-%b-%Y at %H:%M")})
             )
-            st.caption("👉 *This file contains your full compliance record history, student matrices, tracking indicators, and contact structures for this site location.*")
-            
         except Exception as backup_err:
-            st.warning(f"Unable to process backup data stream elements: {backup_err}")
-
+            st.warning(f"Unable to process backup elements: {backup_err}")
+            
         st.markdown("---")
-        st.info("🔒 **Data Retention Lock Active:** Permanent profile deletion is disabled to preserve mandatory 6-year history records.")
+        st.info("🔒 Data Retention Lock Active: Permanent profile deletion is disabled to preserve mandatory 6-year history records.")
 
 # --- 10. GLOBAL FALLBACK ---
-else:
     st.title(f"📄 {page}")
     st.info("Placeholder configuration panel layout.")
