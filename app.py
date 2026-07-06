@@ -687,45 +687,22 @@ elif page == "Admin Settings":
                 for col in required_cols:
                     if col not in roster_df.columns:
                         roster_df[col] = 0.0 if col == 'ncs_funded_hours' else "Not Listed"
-                        
-# --- FORCE THE TABLE TO RE-FORMAT ALL DATES IN THE UI ---
-def clean_and_format_dob(val):
-    val_str = str(val).strip()
-    if not val or pd.isna(val) or val_str in ["", "None", "Not Listed"]:
-        return "Not Listed"
-    try:
-        # If it's already in standard dd/mm/yyyy, keep it
-        if "/" in val_str and val_str.find("/") == 2:
-            return val_str
-        
-        # If it's stored as yyyy-mm-dd or yyyy/mm/dd, normalize and parse it
-        clean_date = val_str.replace("-", "/")
-        parsed_dt = datetime.strptime(clean_date, "%Y/%m/%d")
-        return parsed_dt.strftime("%d/%m/%Y")
-    except Exception:
-        # If any old custom string is there, just print it safely
-        return val_str
 
-# --- FORCE THE TABLE TO RE-FORMAT ALL DATES IN THE UI ---
-def clean_and_format_dob(val):
-    val_str = str(val).strip()
-    if not val or pd.isna(val) or val_str in ["", "None", "Not Listed"]:
-        return "Not Listed"
-    try:
-        # If it's already in standard dd/mm/yyyy, keep it
-        if "/" in val_str and val_str.find("/") == 2:
-            return val_str
-        
-        # If it's stored as yyyy-mm-dd or yyyy/mm/dd, normalize and parse it
-        clean_date = val_str.replace("-", "/")
-        parsed_dt = datetime.strptime(clean_date, "%Y/%m/%d")
-        return parsed_dt.strftime("%d/%m/%Y")
-    except Exception:
-        # If any old custom string is there, print it safely
-        return val_str
-
-# Apply the conversion to the date_of_birth column before creating display_roster
-roster_df['date_of_birth'] = roster_df['date_of_birth'].apply(clean_and_format_dob)
+                # --- FORCE THE TABLE TO RE-FORMAT ALL DATES IN THE UI ---
+                def clean_and_format_dob(val):
+                    val_str = str(val).strip()
+                    if not val or pd.isna(val) or val_str in ["", "None", "Not Listed"]:
+                        return "Not Listed"
+                    try:
+                        # If it's already in standard dd/mm/yyyy, keep it
+                        if "/" in val_str and val_str.find("/") == 2:
+                            return val_str
+                        # If it's stored as yyyy-mm-dd or yyyy/mm/dd, normalize and parse it
+                        clean_date = val_str.replace("-", "/")
+                        parsed_dt = datetime.strptime(clean_date, "%Y/%m/%d")
+                        return parsed_dt.strftime("%d/%m/%Y")
+                    except Exception:
+                        return val_str
 
                 # Apply the conversion to the date_of_birth column before creating display_roster
                 roster_df['date_of_birth'] = roster_df['date_of_birth'].apply(clean_and_format_dob)
