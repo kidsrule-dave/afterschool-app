@@ -633,7 +633,8 @@ elif page == "Admin Settings":
                     else:
                         try:
                             # Convert date object safely to text for SQL insertion
-                            dob_str = str(new_dob) if new_dob else None
+                            dob_sdob_str = new_dob.strftime("%d/%m/%Y") if new_dob else None
+                            tr = str(new_dob) if new_dob else None
                             
                             supabase.table("children").insert({
                                 "name": new_name.strip(),
