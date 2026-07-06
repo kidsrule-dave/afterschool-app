@@ -688,6 +688,7 @@ elif page == "Admin Settings":
                     if col not in roster_df.columns:
                         roster_df[col] = 0.0 if col == 'ncs_funded_hours' else "Not Listed"
                         
+# --- FORCE THE TABLE TO RE-FORMAT ALL DATES IN THE UI ---
 def clean_and_format_dob(val):
     val_str = str(val).strip()
     if not val or pd.isna(val) or val_str in ["", "None", "Not Listed"]:
@@ -726,14 +727,6 @@ display_roster = roster_df[[
     'pickup_2_name': 'Pickup 2',
     'pickup_3_name': 'Pickup 3'
 })
-                    'dietary_requirements': 'Dietary Notes',
-                    'medical_notes': 'Medical Notes',
-                    'emergency_name': 'Emergency Contact',
-                    'emergency_phone': 'Emergency Phone',
-                    'pickup_1_name': 'Pickup 1',
-                    'pickup_2_name': 'Pickup 2',
-                    'pickup_3_name': 'Pickup 3'
-                })
                 
                 st.dataframe(display_roster, use_container_width=True, hide_index=True)
                 
