@@ -28,7 +28,43 @@ def ncs_round(check_in, check_out):
 def is_sunday():
     """Returns True only if today is Sunday (weekday 6)."""
     return datetime.now().weekday() == 6
+from fpdf import FPDF
 
+def generate_staffing_pdf(df_data, site_name, day_name):
+    """Generates a clean tabular PDF sheet for local printing and shift rosters."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 16)
+    
+    # Header Banner
+    pdf.cell(0, 10, f"KidsRule Childcare — Onsite Staffing Roster", ln=True, align="C")
+    pdf.set_font("Helvetica", "", 12)
+    pdf.cell(0, 10, f"Site Location: {site_name} Hub  |  Target Allocation Day: {day_name}", ln=True, align="C")
+    pdf.ln(10)
+    
+    # Table Structure Headers
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_fill_color(230, 230, 230)
+    pdf.cell(60, 10, "Child Name", border=1, fill=True)
+    pdf.cell(65, 10, "Breakfast Club Required?", border=1, fill=True)
+    pdf.cell(65, 10, "Afterschool Club Required?", border=1, fill=True, ln=True)
+    
+    # Table Content Injection Loop
+    pdf.set_font("Helvetica", "", 10)
+    for _, row in df_data.iterrows():
+        bc_status = "YES (Expected)" if row.get('Breakfast Club', False) else "No Booking"
+        as_status = "YES (Expected)" if row.get('Afterschool', False) else "No Booking"
+        
+        pdf.cell(60, 8, str(row['Child Name']), border=1)
+        pdf.cell(65, 8, bc_status, border=1)
+        pdf.cell(65, 8, as_status, border=1, ln=True)
+        
+    pdf.ln(15)
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.cell(0, 10, f"Generated automatically on: {datetime.now().strftime('%d-%b-%Y at %H:%M:%S')}", ln=True)
+    
+    # Output file into a binary byte stream stream compatible with Streamlit download buttons
+    return pdf.output()
 # --- 3. NAVIGATION & ADMIN SIDEBAR ---
 sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
 # "Staffing Report" has been added below to restore the missing print/download view
@@ -346,56 +382,53 @@ elif page == "Staffing Report":
     st.title("📋 Daily Staffing & Attendance Report")
     st.caption("Review expected daily rosters based on parental bookings to schedule staffing levels.")
     
-    report_day = st.selectbox("Select Day to View", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Today (Current)"])
+    report_day = st.selectbox("Select Day to View", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
     
     try:
-        bookings_res = supabase.table("weekly_bookings").select("child_name, day_of_week, breakfast_club, afterschool").eq("location", sel_site).execute()
+        # Fetch upcoming scheduling choices from parent templates
+        bookings_res = supabase.table("weekly_bookings").select("child_name, day_of_week, breakfast_club, afterschool").eq("location", sel_site).eq("day_of_week", report_day).execute()
         bookings_data = bookings_res.data
         
         if not bookings_data:
-            st.info(f"No parent schedule templates found for {sel_site} in the system database.")
+            st.info(f"No parent schedule templates found for {sel_site} on {report_day} in the system database.")
         else:
+            # Structuring raw payload data into a presentation dataframe
             df_bookings = pd.DataFrame(bookings_data)
+            df_display = df_bookings.rename(columns={
+                "child_name": "Child Name",
+                "breakfast_club": "Breakfast Club",
+                "afterschool": "Afterschool"
+            })
             
-            if report_day == "Today (Current)":
-                days_map = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                target_day = days_map[datetime.now().weekday()]
-            else:
-                target_day = report_day
-                
-            df_filtered = df_bookings[df_bookings['day_of_week'] == target_day].copy()
+            # Interactive Grid View layout display
+            st.dataframe(df_display[["Child Name", "Breakfast Club", "Afterschool"]], use_container_width=True, hide_index=True)
             
-            if df_filtered.empty:
-                st.warning(f"No children are booked to attend {sel_site} on {target_day}.")
-            else:
-                df_filtered = df_filtered[(df_filtered['breakfast_club'] == True) | (df_filtered['afterschool'] == True)]
-                
-                df_filtered['Breakfast Club'] = df_filtered['breakfast_club'].apply(lambda x: "✅ Expected" if x else "❌ No")
-                df_filtered['Afterschool'] = df_filtered['afterschool'].apply(lambda x: "✅ Expected" if x else "❌ No")
-                
-                df_display = df_filtered[['child_name', 'Breakfast Club', 'Afterschool']].rename(columns={'child_name': 'Child Name'})
-                df_display = df_display.sort_values(by="Child Name")
-                
-                total_bc = int(df_filtered['breakfast_club'].sum())
-                total_as = int(df_filtered['afterschool'].sum())
-                
-                m1, m2 = st.columns(2)
-                m1.metric("🌅 Expected Breakfast Club", f"{total_bc} Kids")
-                m2.metric("👦 Expected Afterschool", f"{total_as} Kids")
-                
-                st.write(f"### 📋 Expected Roster for {target_day}")
-                st.dataframe(df_display, use_container_width=True, hide_index=True)
-                
-                csv = df_display.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📥 Download This Roster (CSV)",
-                    data=csv,
-                    file_name=f"staffing_roster_{sel_site.lower()}_{target_day.lower()}.csv",
-                    mime="text/csv"
-                )
-                st.info("💡 **Printing Tip:** To print this roster for staff rooms, press **Ctrl + P** (Windows) or **Cmd + P** (Mac) to use your web browser's built-in printing panel.")
+            # Count expected attendance metrics to help figure out necessary child-to-staff counts
+            total_bc = df_display["Breakfast Club"].sum()
+            total_as = df_display["Afterschool"].sum()
+            
+            c1, c2 = st.columns(2)
+            c1.metric("🌅 Expected Breakfast Attendance", total_bc)
+            c2.metric("👦 Expected Afterschool Attendance", total_as)
+            
+            st.markdown("---")
+            st.subheader("🖨️ Onsite Print Controls")
+            
+            # Generate the binary payload data structure
+            pdf_bytes = generate_staffing_pdf(df_display, sel_site, report_day)
+            
+            # Mount the native file system anchor control
+            st.download_button(
+                label="📥 Export & Download Staffing Roster (PDF)",
+                data=pdf_bytes,
+                file_name=f"Staffing_Roster_{sel_site}_{report_day}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="download_staff_roster_pdf_btn"
+            )
+            
     except Exception as e:
-        st.error(f"Error compiling staffing intelligence: {e}")
+        st.error(f"Failed to compile staffing choices layout: {e}")
 # --- 8. NCS COMPLIANCE ---
 # --- 8B. NCS COMPLIANCE ---
 elif page == "NCS Compliance":
