@@ -36,8 +36,8 @@ def generate_staffing_pdf(df_data, site_name, day_name):
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     
-    # Header Banner
-    pdf.cell(0, 10, f"KidsRule Childcare — Onsite Staffing Roster", ln=True, align="C")
+    # FIXED: Replaced "—" with a clean standard pipe symbol "|" to pass font validation checks
+    pdf.cell(0, 10, f"KidsRule Childcare | Onsite Staffing Roster", ln=True, align="C")
     pdf.set_font("Helvetica", "", 12)
     pdf.cell(0, 10, f"Site Location: {site_name} Hub  |  Target Allocation Day: {day_name}", ln=True, align="C")
     pdf.ln(10)
