@@ -528,82 +528,174 @@ elif page == "NCS Compliance":
                 st.download_button("📥 Download Unused Hours Audit (CSV)", data=csv_r5, file_name=f"ncs_pobal_flags_{sel_site.lower()}.csv", mime="text/csv", key="dl_r5")
 # --- 9. ADMIN SETTINGS ---
 elif page == "Admin Settings":
-    st.title("⚙️ Admin Settings & Roster Engine")
+    st.title("⚙️ Admin Settings")
     
-    # STABLE INTERFACE INITIALIZATION
-    adm_tab1, adm_tab2 = st.tabs(["➕ Add New Child", "👥 Roster Management & Backup"])
-    
-    with adm_tab1:
-        st.subheader("Create a New Student Profile")
-        with st.form("new_child_form"):
-            new_name = st.text_input("Child Full Name")
-            new_chit = st.text_input("NCS CHIT Number")
-            ncs_hours = st.number_input("Funded NCS Hours Per Week", min_value=0.0, step=0.5)
-            new_dob = st.date_input("Date of Birth", value=None)
-            dietary_notes = st.text_area("Dietary/Allergy Notes")
-            medical_notes = st.text_area("Medical Conditions")
-            e_name = st.text_input("Emergency Contact Name")
-            e_phone = st.text_input("Emergency Contact Phone")
-            p1_n = st.text_input("Pickup Contact 1 Name")
-            p1_p = st.text_input("Pickup Contact 1 Phone")
-            p2_n = st.text_input("Pickup Contact 2 Name")
-            p2_p = st.text_input("Pickup Contact 2 Phone")
-            p3_n = st.text_input("Pickup Contact 3 Name")
-            p3_p = st.text_input("Pickup Contact 3 Phone")
+    if "admin_page_unlocked" not in st.session_state:
+        st.session_state["admin_page_unlocked"] = False
+
+    if not st.session_state["admin_page_unlocked"]:
+        st.subheader("🔒 Management Authorization Required")
+        st.caption("This area contains sensitive child protection rosters and registration tools.")
+        
+        mgmt_password = st.text_input("Enter Management Passcode:", type="password", key="mgmt_page_pass")
+        
+        if st.button("Unlock Management Panel", type="primary", use_container_width=True):
+            if mgmt_password == "Letmein!" or mgmt_password == "DevMaster99!":
+                st.session_state["admin_page_unlocked"] = True
+                st.rerun()
+            else:
+                st.error("❌ Incorrect passcode. Management access denied.")
+                
+    else:
+        # --- ADMIN WORKSPACE TABS ---
+        adm_tab1, adm_tab2 = st.tabs(["➕ Add New Child", "👥 Manage Active Roster"])
+        
+        # ----------------------------------------------------
+        # TAB 1: ADD NEW CHILD PROFILE FORM (UPGRADED)
+        # ----------------------------------------------------
+        with adm_tab1:
+            st.subheader(f"➕ Register New Child to {sel_site}")
+            st.caption("Onboard a new child profile directly into the active registration system roster.")
             
-            submit_profile = st.form_submit_button("Save Profile to Supabase Database")
-            
-            if submit_profile:
-                try:
-                    dob_str = str(new_dob) if new_dob else None
-                    supabase.table("children").insert({
-                        "name": new_name.strip(),
-                        "location": sel_site,
-                        "ncs_chit_number": new_chit.strip(),
-                        "ncs_funded_hours": float(ncs_hours),
-                        "date_of_birth": dob_str,
-                        "dietary_requirements": dietary_notes.strip() or "None",
-                        "medical_notes": medical_notes.strip() or "None",
-                        "emergency_name": e_name.strip() or "Not Listed",
-                        "emergency_phone": e_phone.strip() or "Not Listed",
-                        "pickup_1_name": p1_n.strip() or "Mom",
-                        "pickup_1_phone": p1_p.strip() or "",
-                        "pickup_2_name": p2_n.strip() or "",
-                        "pickup_2_phone": p2_p.strip() or "",
-                        "pickup_3_name": p3_n.strip() or "",
-                        "pickup_3_phone": p3_p.strip() or "",
-                        "is_active": True
-                    }).execute()
-                    st.success(f"🎉 Successfully created active profile for {new_name}!")
-                    st.rerun()
-                except Exception as db_err:
-                    st.error(f"Failed to save profile record: {db_err}")
+            with st.form("add_new_child_form", clear_on_submit=True):
+                # Core Info
+                col_info1, col_info2 = st.columns(2)
+                with col_info1:
+                    new_name = st.text_input("Child's Full Name * (Must be Unique)")
+                    new_chit = st.text_input("NCS CHIT Number")
+                with col_info2:
+                    new_dob = st.date_input("Date of Birth", value=None, min_value=datetime(2010, 1, 1), max_value=datetime.now())
+                    # ADDED: Numeric entry for NCS officially awarded hours
+                    ncs_hours = st.number_input("NCS Funded Hours per Week *", min_value=0.0, max_value=50.0, value=0.0, step=0.5, help="Enter the total weekly hours awarded on the CHIT/Hive allocation.")
                     
-    with adm_tab2:
-        st.subheader(f"👥 Current Active Roster ({sel_site})")
-        try:
-            roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
-            site_roster = roster_res.data
-        except Exception as e:
-            st.error(f"Error loading system roster: {e}")
-            site_roster = []
+                # Health & Safeguarding Metrics
+                st.write("---")
+                st.caption("🩺 Health, Dietary & Safeguarding Requirements:")
+                dietary_notes = st.text_area("Dietary Requirements / Allergies", placeholder="List any food allergies, intolerances, or religious dietary restrictions (or leave blank if none)...")
+                medical_notes = st.text_area("Medical Notes & Conditions", placeholder="List any medical diagnoses, inhalers, regular medications, or special needs (or leave blank if none)...")
+                
+                # Contacts
+                st.write("---")
+                st.caption("🚨 Emergency Contact Framework:")
+                c_a, c_b = st.columns(2)
+                e_name = c_a.text_input("Primary Emergency Contact Name")
+                e_phone = c_b.text_input("Primary Emergency Contact Phone")
+                
+                st.write("---")
+                st.caption("🚗 Authorized Pickup Personnel Slots:")
+                p1_n = st.text_input("Pickup Contact 1 Name")
+                p1_p = st.text_input("Pickup Contact 1 Phone")
+                
+                p2_n = st.text_input("Pickup Contact 2 Name")
+                p2_p = st.text_input("Pickup Contact 2 Phone")
+                
+                p3_n = st.text_input("Pickup Contact 3 Name")
+                p3_p = st.text_input("Pickup Contact 3 Phone")
+                
+                submit_child = st.form_submit_button("Register & Activate Profile", type="primary", use_container_width=True)
+                
+                if submit_child:
+                    if not new_name.strip():
+                        st.error("❌ Missing Field: You must specify a Child Name to create a database profile.")
+                    else:
+                        try:
+                            # Convert date object safely to text for SQL insertion
+                            dob_str = str(new_dob) if new_dob else None
+                            
+                            supabase.table("children").insert({
+                                "name": new_name.strip(),
+                                "location": sel_site,
+                                "ncs_chit_number": new_chit.strip(),
+                                "ncs_funded_hours": float(ncs_hours), # SAVED: Injected numerical input into data stream
+                                "date_of_birth": dob_str,
+                                "dietary_requirements": dietary_notes.strip() or "None",
+                                "medical_notes": medical_notes.strip() or "None",
+                                "emergency_name": e_name.strip() or "Not Listed",
+                                "emergency_phone": e_phone.strip() or "Not Listed",
+                                "pickup_1_name": p1_n.strip() or "Mom",
+                                "pickup_1_phone": p1_p.strip() or "",
+                                "pickup_2_name": p2_n.strip() or "",
+                                "pickup_2_phone": p2_p.strip() or "",
+                                "pickup_3_name": p3_n.strip() or "",
+                                "pickup_3_phone": p3_p.strip() or "",
+                                "is_active": True
+                            }).execute()
+                            st.success(f"🎉 Successfully created active profile for **{new_name}** at {sel_site}!")
+                            st.toast("Profile data pipeline updated.")
+                        except Exception as db_err:
+                            st.error(f"Failed to save profile record to database: {db_err}")
+
+        # ----------------------------------------------------
+        # TAB 2: ACTIVE ROSTER MANAGEMENT & ARCHIVING
+        # ----------------------------------------------------
+        with adm_tab2:
+            st.subheader(f"👥 Current Active Roster ({sel_site})")
+            st.caption("Review active students. Archiving a student preserves their history for the 6-year retention mandate.")
             
-        if not site_roster:
-            st.info(f"No active children registered at the {sel_site} hub.")
-        else:
-            roster_df = pd.DataFrame(site_roster)
-            st.dataframe(roster_df[["name", "ncs_chit_number", "ncs_funded_hours"]], use_container_width=True)
-            
-            child_to_archive = st.selectbox("Select profile to archive:", options=[c['name'] for c in site_roster], index=None)
-            if child_to_archive:
-                confirm_archive = st.checkbox(f"Confirm I want to archive {child_to_archive}.")
-                if st.button("Archive Profile", type="primary", disabled=not confirm_archive):
-                    try:
-                        supabase.table("children").update({"is_active": False}).eq("name", child_to_archive).eq("location", sel_site).execute()
-                        st.success(f"📦 {child_to_archive} has been safely archived.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Failed to archive: {e}")
+            try:
+                roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
+                site_roster = roster_res.data
+            except Exception as e:
+                st.error(f"Error loading system roster: {e}")
+                site_roster = []
+                
+            if not site_roster:
+                st.info(f"No active children registered at the {sel_site} hub.")
+            else:
+                roster_df = pd.DataFrame(site_roster)
+                
+                # Check column presence to prevent UI rendering dropouts
+                required_cols = [
+                    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
+                    'medical_notes', 'emergency_name', 'emergency_phone', 
+                    'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
+                ]
+                for col in required_cols:
+                    if col not in roster_df.columns:
+                        roster_df[col] = 0.0 if col == 'ncs_funded_hours' else "Not Listed"
+                        
+                display_roster = roster_df[[
+                    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
+                    'medical_notes', 'emergency_name', 'emergency_phone', 
+                    'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
+                ]].rename(columns={
+                    'name': 'Child Name',
+                    'ncs_chit_number': 'NCS CHIT',
+                    'ncs_funded_hours': 'Funded Hrs/Wk', # UPDATED: Included inside display data grid
+                    'date_of_birth': 'DOB',
+                    'dietary_requirements': 'Dietary Notes',
+                    'medical_notes': 'Medical Notes',
+                    'emergency_name': 'Emergency Contact',
+                    'emergency_phone': 'Emergency Phone',
+                    'pickup_1_name': 'Pickup 1',
+                    'pickup_2_name': 'Pickup 2',
+                    'pickup_3_name': 'Pickup 3'
+                })
+                
+                st.dataframe(display_roster, use_container_width=True, hide_index=True)
+                
+                st.write("#### 📦 Archive Student Profile")
+                child_to_archive = st.selectbox(
+                    "Select child profile to archive (hides them from active check-in grids):", 
+                    options=[c['name'] for c in site_roster],
+                    index=None,
+                    placeholder="Choose profile to archive...",
+                    key="admin_archive_child_selectbox"
+                )
+                
+                if child_to_archive:
+                    confirm_archive = st.checkbox(f"Confirm I want to archive {child_to_archive}. Their historical log remains securely stored for compliance auditing.")
+                    
+                    if st.button("Archive Profile", type="primary", disabled=not confirm_archive):
+                        try:
+                            supabase.table("children").update({"is_active": False}).eq("name", child_to_archive).eq("location", sel_site).execute()
+                            st.success(f"📦 {child_to_archive} has been safely archived. Profile hidden from live views.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to archive child profile record: {e}")
+                            
+        st.markdown("---")
+        st.info("🔒 **Data Retention Lock Active:** Permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
                         
         # --- DISASTER RECOVERY & AUDIT BACKUP PROCEDURES ---
         st.markdown("---")
