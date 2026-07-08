@@ -769,9 +769,12 @@ elif page == "Admin Settings":
                     
                     if st.button("Save Profile Modifications", type="primary", use_container_width=True):
                         try:
+                            # FIX: Safely handle potential None values before using .strip()
+                            safe_chit = updated_chit.strip() if updated_chit else ""
+                            
                             supabase.table("children").update({
                                 "ncs_funded_hours": float(updated_hours),
-                                "ncs_chit_number": updated_chit.strip()
+                                "ncs_chit_number": safe_chit
                             }).eq("name", selected_child_name).eq("location", sel_site).execute()
                             
                             st.success(f"⚙️ Successfully adjusted registration profile configurations for **{selected_child_name}**!")
