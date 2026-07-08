@@ -159,6 +159,9 @@ elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Sign-Out")
     st.caption("Tap a child's name to select who is collecting them.")
     
+    # ADDED: Clear visual alert instruction for staff members
+    st.info("⚠️ **Important:** If a warning triangle (**⚠️**) is shown next to a child's name, please tap their name and review the allergy and medical notes inside the alert banner before signing them out.")
+    
     try:
         # UPGRADED: Pulling dietary_requirements and medical_notes from the database table
         children_res = supabase.table("children").select(
