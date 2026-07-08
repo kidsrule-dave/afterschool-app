@@ -627,37 +627,38 @@ elif page == "Admin Settings":
                 
                 submit_child = st.form_submit_button("Register & Activate Profile", type="primary", use_container_width=True)
                 
-if submit_child:
-    if not new_name.strip():
-        st.error("❌ Missing Field: You must specify a Child Name to create a database profile.")
-    else:
-        try:
-            # FIX: Changed variable name to dob_str to match what Supabase uses below
-            dob_str = new_dob.strftime("%d/%m/%Y") if new_dob else None
-            tr = str(new_dob) if new_dob else None
-            
-            supabase.table("children").insert({
-                "name": new_name.strip(),
-                "location": sel_site,
-                "ncs_chit_number": new_chit.strip(),
-                "ncs_funded_hours": float(ncs_hours), 
-                "date_of_birth": dob_str,  # This will now work perfectly
-                "dietary_requirements": dietary_notes.strip() or "None",
-                "medical_notes": medical_notes.strip() or "None",
-                "emergency_name": e_name.strip() or "Not Listed",
-                "emergency_phone": e_phone.strip() or "Not Listed",
-                "pickup_1_name": p1_n.strip() or "Mom",
-                "pickup_1_phone": p1_p.strip() or "",
-                "pickup_2_name": p2_n.strip() or "",
-                "pickup_2_phone": p2_p.strip() or "",
-                "pickup_3_name": p3_n.strip() or "",
-                "pickup_3_phone": p3_p.strip() or "",
-                "is_active": True
-            }).execute()
-            st.success(f"🎉 Successfully created active profile for **{new_name}** at {sel_site}!")
-            st.toast("Profile data pipeline updated.")
-        except Exception as db_err:
-            st.error(f"Failed to save profile record to database: {db_err}"))
+                if submit_child:
+                    if not new_name.strip():
+                        st.error("❌ Missing Field: You must specify a Child Name to create a database profile.")
+                    else:
+                        try:
+                            # 1. FIXED: Changed variable name to dob_str
+                            dob_str = new_dob.strftime("%d/%m/%Y") if new_dob else None
+                            tr = str(new_dob) if new_dob else None
+                            
+                            supabase.table("children").insert({
+                                "name": new_name.strip(),
+                                "location": sel_site,
+                                "ncs_chit_number": new_chit.strip(),
+                                "ncs_funded_hours": float(ncs_hours),
+                                "date_of_birth": dob_str,
+                                "dietary_requirements": dietary_notes.strip() or "None",
+                                "medical_notes": medical_notes.strip() or "None",
+                                "emergency_name": e_name.strip() or "Not Listed",
+                                "emergency_phone": e_phone.strip() or "Not Listed",
+                                "pickup_1_name": p1_n.strip() or "Mom",
+                                "pickup_1_phone": p1_p.strip() or "",
+                                "pickup_2_name": p2_n.strip() or "",
+                                "pickup_2_phone": p2_p.strip() or "",
+                                "pickup_3_name": p3_n.strip() or "",
+                                "pickup_3_phone": p3_p.strip() or "",
+                                "is_active": True
+                            }).execute()
+                            st.success(f"🎉 Successfully created active profile for **{new_name}** at {sel_site}!")
+                            st.toast("Profile data pipeline updated.")
+                        except Exception as db_err:
+                            # 2. FIXED: Removed the duplicate closing parenthesis here
+                            st.error(f"Failed to save profile record to database: {db_err}")
 
         # ----------------------------------------------------
         # TAB 2: ACTIVE ROSTER MANAGEMENT & ARCHIVING
