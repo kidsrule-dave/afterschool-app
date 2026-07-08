@@ -576,7 +576,7 @@ elif page == "Admin Settings":
         mgmt_password = st.text_input("Enter Management Passcode:", type="password", key="mgmt_page_pass")
         
         if st.button("Unlock Management Panel", type="primary", use_container_width=True):
-            if mgmt_password == "Letmein!" or mgmt_password == "DevMaster99!":
+            if mgmt_password in ["Letmein!", "DevMaster99!"]:
                 st.session_state["admin_page_unlocked"] = True
                 st.rerun()
             else:
@@ -635,7 +635,7 @@ elif page == "Admin Settings":
                         st.error("❌ Missing Field: You must specify a Child Name to create a database profile.")
                     else:
                         try:
-                            # 1. FIXED: Changed variable name to dob_str
+                            # 1. FIXED: Correct variable name set to match dictionary key below
                             dob_str = new_dob.strftime("%d/%m/%Y") if new_dob else None
                             tr = str(new_dob) if new_dob else None
                             
@@ -660,7 +660,7 @@ elif page == "Admin Settings":
                             st.success(f"🎉 Successfully created active profile for **{new_name}** at {sel_site}!")
                             st.toast("Profile data pipeline updated.")
                         except Exception as db_err:
-                            # 2. FIXED: Removed the duplicate closing parenthesis here
+                            # 2. FIXED: Removed the extra trailing parenthesis to prevent syntax crashes
                             st.error(f"Failed to save profile record to database: {db_err}")
 
         # ----------------------------------------------------
@@ -732,6 +732,57 @@ elif page == "Admin Settings":
                 
                 st.dataframe(display_roster, use_container_width=True, hide_index=True)
                 
+                # ----------------------------------------------------
+                # INTEGRATED FEATURE: CORRECT CHILD ALLOCATED HOURS
+                # ----------------------------------------------------
+                st.write("---")
+                st.subheader("✏️ Correct Child Registration Details / NCS Hours")
+                st.caption("Modify hours adjustments if mistakes or HIVE framework updates were made.")
+                
+                # Dynamic roster mapping for easy selection dropdowns
+                child_names = sorted([c['name'] for c in site_roster])
+                selected_child_name = st.selectbox("Select Child Profile to Update:", options=child_names, key="edit_hours_selectbox")
+                
+                if selected_child_name:
+                    # Isolate target child data record
+                    child_record = next(c for c in site_roster if c['name'] == selected_child_name)
+                    current_hours = float(child_record.get('ncs_funded_hours', 0.0))
+                    current_chit = child_record.get('ncs_chit_number', '')
+                    
+                    # Split changes into clean multi-column layouts
+                    edit_col1, edit_col2 = st.columns(2)
+                    with edit_col1:
+                        updated_hours = st.number_input(
+                            f"Update NCS Hours for {selected_child_name}:",
+                            min_value=0.0,
+                            max_value=50.0,
+                            value=current_hours,
+                            step=0.5,
+                            key=f"input_hours_{selected_child_name}"
+                        )
+                    with edit_col2:
+                        updated_chit = st.text_input(
+                            "Correct CHIT / Hive Reference Number:",
+                            value=current_chit,
+                            key=f"input_chit_{selected_child_name}"
+                        )
+                    
+                    if st.button("Save Profile Modifications", type="primary", use_container_width=True):
+                        try:
+                            supabase.table("children").update({
+                                "ncs_funded_hours": float(updated_hours),
+                                "ncs_chit_number": updated_chit.strip()
+                            }).eq("name", selected_child_name).eq("location", sel_site).execute()
+                            
+                            st.success(f"⚙️ Successfully adjusted registration profile configurations for **{selected_child_name}**!")
+                            st.toast("Database pipeline configuration altered.")
+                            st.rerun()
+                        except Exception as update_err:
+                            st.error(f"Failed to update profile configurations: {update_err}")
+                # ----------------------------------------------------
+                # PROFILE ARCHIVING SYSTEM
+                # ----------------------------------------------------
+                st.write("---")
                 st.write("#### 📦 Archive Student Profile")
                 child_to_archive = st.selectbox(
                     "Select child profile to archive (hides them from active check-in grids):", 
@@ -754,7 +805,8 @@ elif page == "Admin Settings":
                             
         st.markdown("---")
         st.info("🔒 **Data Retention Lock Active:** Permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
-                        
+                    
+                          
         # --- DISASTER RECOVERY & AUDIT BACKUP PROCEDURES ---
         st.markdown("---")
         st.subheader("💾 Disaster Recovery & Audit Backup Vault")
@@ -780,11 +832,13 @@ elif page == "Admin Settings":
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                # Save dataframes to the Excel workbook sheets
                 if not df_back_attend.empty:
                     df_back_attend.to_excel(writer, sheet_name="Attendance History", index=False)
                 if not df_back_child.empty:
                     df_back_child.to_excel(writer, sheet_name="Master Child Roster", index=False)
                     
+            # Clean, individual statements on independent indented lines
             processed_data = buffer.getvalue()
             current_date_stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             file_title = f"KidsRule_DB_Backup_{sel_site}_{current_date_stamp}.xlsx"
@@ -796,13 +850,8 @@ elif page == "Admin Settings":
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
                 key="admin_download_backup_vault_btn",
-                on_click=lambda: st.session_state.update({"last_backup_timestamp": datetime.now().strftime("%d-%b-%Y at %H:%M")})
-            )
-        except Exception as backup_err:
-            st.warning(f"Unable to process backup elements: {backup_err}")
-            
-        st.markdown("---")
-        st.info("🔒 Data Retention Lock Active: Permanent profile deletion is disabled to preserve mandatory 6-year history records.")
+                on_click=lambda: st.session_state.update({"last_backup_timestamp": datetime.now().strftime("%d-%b-%Y at %H:%M")
+                    
 
 # --- 10. GLOBAL FALLBACK ---
     st.title(f"📄 {page}")
