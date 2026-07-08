@@ -819,7 +819,7 @@ elif page == "Admin Settings":
             st.error("⚠️ Backup Warning: No local backup snapshot has been generated during this session.")
             
         try:
-            # FIXED: Changed from select("") to select("*") to fetch all rows and columns properly
+            # 1. Fetch data from Supabase
             raw_attendance = supabase.table("attendance").select("*").eq("location", sel_site).execute()
             raw_children = supabase.table("children").select("*").eq("location", sel_site).execute()
             
@@ -832,13 +832,11 @@ elif page == "Admin Settings":
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                # Save dataframes to the Excel workbook sheets
                 if not df_back_attend.empty:
                     df_back_attend.to_excel(writer, sheet_name="Attendance History", index=False)
                 if not df_back_child.empty:
                     df_back_child.to_excel(writer, sheet_name="Master Child Roster", index=False)
                     
-            # Clean, individual statements on independent indented lines
             processed_data = buffer.getvalue()
             current_date_stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             file_title = f"KidsRule_DB_Backup_{sel_site}_{current_date_stamp}.xlsx"
@@ -851,6 +849,14 @@ elif page == "Admin Settings":
                 use_container_width=True,
                 key="admin_download_backup_vault_btn",
                 on_click=lambda: st.session_state.update({"last_backup_timestamp": datetime.now().strftime("%d-%b-%Y at %H:%M")})
+            )
+            
+        except Exception as backup_err:
+            # THIS IS WHAT WAS MISSING OR MISALIGNED:
+            st.warning(f"Unable to process backup elements: {backup_err}")
+            
+        st.markdown("---")
+        st.info("🔒 Data Retention Lock Active: Permanent profile deletion is disabled to preserve mandatory 6-year history records.
             )
                     
 
