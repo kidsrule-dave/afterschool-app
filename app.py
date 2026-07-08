@@ -850,7 +850,8 @@ elif page == "Admin Settings":
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
                 key="admin_download_backup_vault_btn",
-                on_click=lambda: st.session_state.update({"last_backup_timestamp": datetime.now().strftime("%d-%b-%Y at %H:%M")
+                on_click=lambda: st.session_state.update({"last_backup_timestamp": datetime.now().strftime("%d-%b-%Y at %H:%M")})
+            )
                     
 
 # --- 10. GLOBAL FALLBACK ---
