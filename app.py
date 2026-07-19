@@ -128,7 +128,7 @@ elif page == "Weekly Planner":
             st.write("---")
             st.success("🔓 Open: Daily updates and submissions are fully unlocked.")
                 
-            submitted = st.form_submit_button("Submit Plan for Next Week")
+            submitted = st.form_submit_button("Submit Plan for Next Week", disabled=submit_disabled)
             
             if submitted:
                 try:
@@ -143,7 +143,7 @@ elif page == "Weekly Planner":
                         }, on_conflict="child_name,day_of_week").execute()
                     st.success(f"Successfully saved schedule preferences for {selected_child}!")
                 except Exception as e:
-                    st.error(f"Failed to submit database entries: {e}"
+                    st.error(f"Failed to submit database entries: {e}")
 # --- 6. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Sign-Out")
