@@ -711,18 +711,19 @@ elif page == "Admin Settings":
                 
                 st.dataframe(display_roster, use_container_width=True, hide_index=True)
                 
-                # --- EDIT & UPDATE SECTION ---
+                # --- NEW: EDIT & UPDATE SECTION ---
                 st.write("---")
                 st.markdown("### ✏️ Edit Child Profile")
                 
                 # Let the admin select which child they want to edit
                 child_names = roster_df['name'].tolist()
-                selected_child_name = st.selectbox("Select a child to modify:", child_names)
                 
-                # Extract the selected child's current data row safely
-                child_data = roster_df[roster_df['name'] == selected_child_name].iloc[0]
-                child_db_id = child_data['id']
-                
+                # ADD THE KEY PARAMETER HERE TO PREVENT DUPLICATE ID CRASHES
+                selected_child_name = st.selectbox(
+                    "Select a child to modify:", 
+                    child_names, 
+                    key="admin_modify_roster_select"
+                )
                 # Create an inline edit form uniquely keyed to the selected child's ID
                 with st.form(f"edit_child_form_{child_db_id}"):
                     col_edit1, col_edit2 = st.columns(2)
