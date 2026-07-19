@@ -28,7 +28,6 @@ def ncs_round(check_in, check_out):
 def is_sunday():
     """Returns True only if today is Sunday (weekday 6)."""
     return datetime.now().weekday() == 6
-from fpdf import FPDF
 
 def generate_staffing_pdf(df_data, site_name, day_name):
     """Generates a clean tabular PDF sheet for local printing and shift rosters."""
@@ -36,7 +35,6 @@ def generate_staffing_pdf(df_data, site_name, day_name):
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     
-    # FIXED: Replaced "—" with a clean standard pipe symbol "|" to pass font validation checks
     pdf.cell(0, 10, f"KidsRule Childcare | Onsite Staffing Roster", ln=True, align="C")
     pdf.set_font("Helvetica", "", 12)
     pdf.cell(0, 10, f"Site Location: {site_name} Hub  |  Target Allocation Day: {day_name}", ln=True, align="C")
@@ -63,7 +61,6 @@ def generate_staffing_pdf(df_data, site_name, day_name):
     pdf.set_font("Helvetica", "I", 9)
     pdf.cell(0, 10, f"Generated automatically on: {datetime.now().strftime('%d-%b-%Y at %H:%M:%S')}", ln=True)
     
-    # 💥 FIXED: Explicitly convert the bytearray to immutable standard bytes structure
     return bytes(pdf.output())
 # --- 3. NAVIGATION & ADMIN SIDEBAR ---
 sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
