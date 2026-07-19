@@ -641,99 +641,142 @@ elif page == "Admin Settings":
                             step=0.5
                         )
                     
-                    # Submit button for the edits
-                    save_changes = st.form_submit_button("Save Changes to Database", type="primary")
+        # ----------------------------------------------------
+        # TAB 2: ACTIVE ROSTER MANAGEMENT & ARCHIVING
+        # ----------------------------------------------------
+        with adm_tab2:
+            st.subheader(f"👥 Current Active Roster ({sel_site})")
+            st.caption("Review and edit active students. Archiving a student preserves their history for the 6-year retention mandate.")
+            
+            try:
+                roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
+                site_roster = roster_res.data
+            except Exception as e:
+                st.error(f"Error loading system roster: {e}")
+                site_roster = []
+                
+            if not site_roster:
+                st.info(f"No active children registered at the {sel_site} hub.")
+            else:
+                roster_df = pd.DataFrame(site_roster)
+                
+                # Check column presence to prevent UI rendering dropouts
+                required_cols = [
+                    'id', 'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
+                    'medical_notes', 'emergency_name', 'emergency_phone', 
+                    'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
+                ]
+                for col in required_cols:
+                    if col not in roster_df.columns:
+                        roster_df[col] = 0.0 if col == 'ncs_funded_hours' else "Not Listed"
+
+                # --- FORCE THE TABLE TO RE-FORMAT ALL DATES IN THE UI ---
+                def clean_and_format_dob(val):
+                    val_str = str(val).strip()
+                    if not val or pd.isna(val) or val_str in ["", "None", "Not Listed"]:
+                        return "Not Listed"
+                    try:
+                        # If it's already in standard dd/mm/yyyy, keep it
+                        if "/" in val_str and val_str.find("/") == 2:
+                            return val_str
+                        # If it's stored as yyyy-mm-dd or yyyy/mm/dd, normalize and parse it
+                        clean_date = val_str.replace("-", "/")
+                        parsed_dt = datetime.strptime(clean_date, "%Y/%m/%d")
+                        return parsed_dt.strftime("%d/%m/%Y")
+                    except Exception:
+                        return val_str
+
+                # Apply the conversion to the date_of_birth column before creating display_roster
+                roster_df['date_of_birth'] = roster_df['date_of_birth'].apply(clean_and_format_dob)
+
+                # Now display the roster safely
+                display_roster = roster_df[[
+                    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
+                    'medical_notes', 'emergency_name', 'emergency_phone', 
+                    'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
+                ]].rename(columns={
+                    'name': 'Child Name',
+                    'ncs_chit_number': 'NCS CHIT',
+                    'ncs_funded_hours': 'Funded Hrs/Wk',
+                    'date_of_birth': 'DOB',
+                    'dietary_requirements': 'Dietary Notes',
+                    'medical_notes': 'Medical Notes',
+                    'emergency_name': 'Emergency Contact',
+                    'emergency_phone': 'Emergency Phone',
+                    'pickup_1_name': 'Pickup 1',
+                    'pickup_2_name': 'Pickup 2',
+                    'pickup_3_name': 'Pickup 3'
+                })
+                
+                st.dataframe(display_roster, use_container_width=True, hide_index=True)
+                
+                # --- EDIT & UPDATE SECTION ---
+                st.write("---")
+                st.markdown("### ✏️ Edit Child Profile")
+                
+                # Let the admin select which child they want to edit
+                child_names = roster_df['name'].tolist()
+                selected_child_name = st.selectbox("Select a child to modify:", child_names)
+                
+                # Extract the selected child's current data row safely
+                child_data = roster_df[roster_df['name'] == selected_child_name].iloc[0]
+                child_db_id = child_data['id']
+                
+                # Create an inline edit form uniquely keyed to the selected child's ID
+                with st.form(f"edit_child_form_{child_db_id}"):
+                    col_edit1, col_edit2 = st.columns(2)
+                    
+                    with col_edit1:
+                        edit_name = st.text_input("Child's Full Name", value=str(child_data['name']))
+                        edit_chit = st.text_input("NCS CHIT Number", value=str(child_data['ncs_chit_number']))
+                        
+                    with col_edit2:
+                        try:
+                            current_hours = float(child_data['ncs_funded_hours'])
+                        except (ValueError, TypeError):
+                            current_hours = 0.0
+                            
+                        # Capture modifications to weekly awarded caps
+                        edit_hours = st.number_input(
+                            "NCS Funded Hours per Week", 
+                            min_value=0.0, 
+                            max_value=50.0, 
+                            value=current_hours, 
+                            step=0.5
+                        )
+                    
+                    # Form Actions Placement Area
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        save_changes = st.form_submit_button("💾 Save Profile Changes", type="primary", use_container_width=True)
+                    with btn_col2:
+                        archive_child = st.form_submit_button("🗄️ Soft-Archive Profile", use_container_width=True)
                     
                     if save_changes:
+                        if not edit_name.strip():
+                            st.error("❌ Field Error: The child's profile name cannot be blank.")
+                        else:
+                            try:
+                                # Execute targeted SQL payload update against unique database ID row
+                                supabase.table("children").update({
+                                    "name": edit_name.strip(),
+                                    "ncs_chit_number": edit_chit.strip(),
+                                    "ncs_funded_hours": float(edit_hours)
+                                }).eq("id", child_db_id).execute()
+                                
+                                st.success(f"🎉 Changes saved successfully for **{edit_name.strip()}**!")
+                                st.rerun() # Refresh layout so display metrics catch up instantly
+                            except Exception as edit_err:
+                                st.error(f"Failed to update profile record: {edit_err}")
+                                
+                    if archive_child:
                         try:
-                            # Update the record in Supabase using the child's unique database ID
-                            supabase.table("children").update({
-                                "name": edit_name.strip(),
-                                "ncs_chit_number": edit_chit.strip(),
-                                "ncs_funded_hours": float(edit_hours)
-                            }).eq("id", child_data['id']).execute()
-                            
-                            st.success(f"💾 Changes saved successfully for **{edit_name}**!")
-                            st.rerun() # Refresh the application to show the updated dataframe values
-                            
-                        except Exception as edit_err:
-                            st.error(f"Failed to update profile record: {edit_err}")               
-                # ----------------------------------------------------
-                # INTEGRATED FEATURE: CORRECT CHILD ALLOCATED HOURS
-                # ----------------------------------------------------
-                st.write("---")
-                st.subheader("✏️ Correct Child Registration Details / NCS Hours")
-                st.caption("Modify hours adjustments if mistakes or HIVE framework updates were made.")
-                
-                # Dynamic roster mapping for easy selection dropdowns
-                child_names = sorted([c['name'] for c in site_roster])
-                selected_child_name = st.selectbox("Select Child Profile to Update:", options=child_names, key="edit_hours_selectbox")
-                
-                if selected_child_name:
-                    # Isolate target child data record
-                    child_record = next(c for c in site_roster if c['name'] == selected_child_name)
-                    current_hours = float(child_record.get('ncs_funded_hours', 0.0))
-                    current_chit = child_record.get('ncs_chit_number', '')
-                    
-                    # Split changes into clean multi-column layouts
-                    edit_col1, edit_col2 = st.columns(2)
-                    with edit_col1:
-                        updated_hours = st.number_input(
-                            f"Update NCS Hours for {selected_child_name}:",
-                            min_value=0.0,
-                            max_value=50.0,
-                            value=current_hours,
-                            step=0.5,
-                            key=f"input_hours_{selected_child_name}"
-                        )
-                    with edit_col2:
-                        updated_chit = st.text_input(
-                            "Correct CHIT / Hive Reference Number:",
-                            value=current_chit,
-                            key=f"input_chit_{selected_child_name}"
-                        )
-                    
-                    if st.button("Save Profile Modifications", type="primary", use_container_width=True):
-                        try:
-                            # FIX: Safely handle potential None values before using .strip()
-                            safe_chit = updated_chit.strip() if updated_chit else ""
-                            
-                            supabase.table("children").update({
-                                "ncs_funded_hours": float(updated_hours),
-                                "ncs_chit_number": safe_chit
-                            }).eq("name", selected_child_name).eq("location", sel_site).execute()
-                            
-                            st.success(f"⚙️ Successfully adjusted registration profile configurations for **{selected_child_name}**!")
-                            st.toast("Database pipeline configuration altered.")
+                            # Soft-delete row by setting active status flag to false to comply with retention laws
+                            supabase.table("children").update({"is_active": False}).eq("id", child_db_id).execute()
+                            st.success(f"🗄️ **{edit_name.strip()}** has been safely archived out of active rosters.")
                             st.rerun()
-                        except Exception as update_err:
-                            st.error(f"Failed to update profile configurations: {update_err}")
-                # ----------------------------------------------------
-                # PROFILE ARCHIVING SYSTEM
-                # ----------------------------------------------------
-                st.write("---")
-                st.write("#### 📦 Archive Student Profile")
-                child_to_archive = st.selectbox(
-                    "Select child profile to archive (hides them from active check-in grids):", 
-                    options=[c['name'] for c in site_roster],
-                    index=None,
-                    placeholder="Choose profile to archive...",
-                    key="admin_archive_child_selectbox"
-                )
-                
-                if child_to_archive:
-                    confirm_archive = st.checkbox(f"Confirm I want to archive {child_to_archive}. Their historical log remains securely stored for compliance auditing.")
-                    
-                    if st.button("Archive Profile", type="primary", disabled=not confirm_archive):
-                        try:
-                            supabase.table("children").update({"is_active": False}).eq("name", child_to_archive).eq("location", sel_site).execute()
-                            st.success(f"📦 {child_to_archive} has been safely archived. Profile hidden from live views.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Failed to archive child profile record: {e}")
-                            
-        st.markdown("---")
-        st.info("🔒 **Data Retention Lock Active:** Permanent profile deletion is disabled to preserve mandatory 6-year attendance histories for funding audits.")
+                        except Exception as arch_err:
+                            st.error(f"Failed to change profile status: {arch_err}")
                     
                           
         # --- DISASTER RECOVERY & AUDIT BACKUP PROCEDURES ---
