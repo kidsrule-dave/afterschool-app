@@ -827,7 +827,6 @@ elif page == "Admin Settings":
             st.warning(f"Unable to process backup elements: {backup_err}")
             
         st.markdown("---")
-        # FIX: The string literal and parenthesis are now cleanly terminated here
         st.info("🔒 Data Retention Lock Active: Permanent profile deletion is disabled to preserve mandatory 6-year history records.")
 
 # --- 10. GLOBAL FALLBACK ---
