@@ -663,12 +663,12 @@ elif page == "Admin Settings":
                             # 2. FIXED: Removed the extra trailing parenthesis to prevent syntax crashes
                             st.error(f"Failed to save profile record to database: {db_err}")
 
-        # ----------------------------------------------------
+  # ----------------------------------------------------
         # TAB 2: ACTIVE ROSTER MANAGEMENT & ARCHIVING
         # ----------------------------------------------------
         with adm_tab2:
             st.subheader(f"👥 Current Active Roster ({sel_site})")
-            st.caption("Review active students. Archiving a student preserves their history for the 6-year retention mandate.")
+            st.caption("Review and edit active students. Archiving a student preserves their history for the 6-year retention mandate.")
             
             try:
                 roster_res = supabase.table("children").select("*").eq("location", sel_site).eq("is_active", True).execute()
@@ -684,13 +684,14 @@ elif page == "Admin Settings":
                 
                 # Check column presence to prevent UI rendering dropouts
                 required_cols = [
-                    'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
+                    'id', 'name', 'ncs_chit_number', 'ncs_funded_hours', 'date_of_birth', 'dietary_requirements', 
                     'medical_notes', 'emergency_name', 'emergency_phone', 
                     'pickup_1_name', 'pickup_2_name', 'pickup_3_name'
                 ]
                 for col in required_cols:
                     if col not in roster_df.columns:
                         roster_df[col] = 0.0 if col == 'ncs_funded_hours' else "Not Listed"
+
 
                 # --- FORCE THE TABLE TO RE-FORMAT ALL DATES IN THE UI ---
                 def clean_and_format_dob(val):
@@ -731,7 +732,58 @@ elif page == "Admin Settings":
                 })
                 
                 st.dataframe(display_roster, use_container_width=True, hide_index=True)
+                 # --- NEW: EDIT & UPDATE SECTION ---
+                st.write("---")
+                st.markdown("### ✏️ Edit Child Profile")
                 
+                # Let the admin select which child they want to edit
+                child_names = roster_df['name'].tolist()
+                selected_child_name = st.selectbox("Select a child to modify:", child_names)
+                
+                # Extract the selected child's current data row
+                child_data = roster_df[roster_df['name'] == selected_child_name].iloc[0]
+                
+                # Create an inline edit form for the selected child
+                with st.form("edit_child_form"):
+                    col_edit1, col_edit2 = st.columns(2)
+                    
+                    with col_edit1:
+                        edit_name = st.text_input("Child's Full Name", value=child_data['name'])
+                        edit_chit = st.text_input("NCS CHIT Number", value=child_data['ncs_chit_number'])
+                        
+                    with col_edit2:
+                        # Ensure the database value falls back gracefully if it isn't a valid float
+                        try:
+                            current_hours = float(child_data['ncs_funded_hours'])
+                        except (ValueError, TypeError):
+                            current_hours = 0.0
+                            
+                        # THIS IS THE FIXED INPUT FIELD THAT SEEDS AND UPDATES THE HOURS
+                        edit_hours = st.number_input(
+                            "NCS Funded Hours per Week", 
+                            min_value=0.0, 
+                            max_value=50.0, 
+                            value=current_hours, 
+                            step=0.5
+                        )
+                    
+                    # Submit button for the edits
+                    save_changes = st.form_submit_button("Save Changes to Database", type="primary")
+                    
+                    if save_changes:
+                        try:
+                            # Update the record in Supabase using the child's unique database ID
+                            supabase.table("children").update({
+                                "name": edit_name.strip(),
+                                "ncs_chit_number": edit_chit.strip(),
+                                "ncs_funded_hours": float(edit_hours)
+                            }).eq("id", child_data['id']).execute()
+                            
+                            st.success(f"💾 Changes saved successfully for **{edit_name}**!")
+                            st.rerun() # Refresh the application to show the updated dataframe values
+                            
+                        except Exception as edit_err:
+                            st.error(f"Failed to update profile record: {edit_err}")               
                 # ----------------------------------------------------
                 # INTEGRATED FEATURE: CORRECT CHILD ALLOCATED HOURS
                 # ----------------------------------------------------
