@@ -214,15 +214,16 @@ elif page == "Quick-Tap Board":
                 with st.container(border=True):
                     st.subheader(f"🔑 Sign-Out: {selected_log['name']}")
                     st.write(f"🎒 *In since {selected_log['check_in']} ({selected_log.get('session_type', 'Afterschool')})*")
-                    
+                    # --- CRITICAL MEDICAL/DIETARY ALERT BANNER IN SIGN-OUT WINDOW ---
                     d_notes = meta.get("dietary_requirements", "None")
                     m_notes = meta.get("medical_notes", "None")
+                    
                     if d_notes != "None" or m_notes != "None":
-                    with st.expander("🚨 Critical Profile Care Alert (Tap to View)", expanded=True):
-                        if d_notes != "None":
-                            st.markdown(f"🥦 Dietary/Allergies: {d_notes}")
-                        if m_notes != "None":
-                            st.markdown(f"🩺 Medical Conditions: {m_notes}")
+                        with st.expander("🚨 Critical Profile Care Alert (Tap to View)", expanded=True):
+                            if d_notes != "None":
+                                st.markdown(f"🥦 **Dietary/Allergies:** {d_notes}")
+                            if m_notes != "None":
+                                st.markdown(f"🩺 **Medical Conditions:** {m_notes}")
                             
                     st.warning(f"🚨 Emergency Contact: {e_name} — {e_phone}")
                     st.write("### Choose Authorized Collector:")
