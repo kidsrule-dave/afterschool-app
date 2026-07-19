@@ -391,31 +391,19 @@ elif page == "Staffing Report":
             )
     except Exception as e:
         st.error(f"Failed to compile staffing choices layout: {e}")
-# --- 8. NCS COMPLIANCE ---
-# --- 8B. NCS COMPLIANCE ---
+# --- 9. NCS COMPLIANCE ---
 elif page == "NCS Compliance":
     st.title("📊 NCS Compliance Reporting Hub")
-    st.caption(f"Audit-ready statutory compliance intelligence engine for **{sel_site}**.")
+    st.caption(f"Audit-ready statutory compliance intelligence engine for {sel_site}.")
     
     try:
-        # Fetch finalized attendance records
-        compliance_res = (
-            supabase.table("attendance")
-            .select("date", "name", "session_type", "check_in", "check_out", "collected_by", "calculated_hours")
-            .eq("location", sel_site)
-            .not_.is_("check_out", "null")
-            .order("date", desc=True)
-            .execute()
-        )
+        compliance_res = supabase.table("attendance").select("date", "name", "session_type", "check_in", "check_out", "collected_by", "calculated_hours").eq("location", sel_site).not_.is_("check_out", "null").order("date", desc=True).execute()
         compliance_data = compliance_res.data
-        
-        # UPGRADED: Pull official children registration metadata to access ncs_funded_hours
         children_meta_res = supabase.table("children").select("name", "ncs_funded_hours").eq("location", sel_site).execute()
         children_meta_data = children_meta_res.data
     except Exception as e:
         st.error(f"Failed to fetch compliance logs or master roster limits: {e}")
-        compliance_data = []
-        children_meta_data = []
+        compliance_data, children_meta_data = [], []
         
     if not compliance_data:
         st.info(f"No completed checkout logs available for {sel_site} to compile compliance metrics.")
@@ -428,12 +416,15 @@ elif page == "NCS Compliance":
         with rep_tab1:
             st.subheader("📋 Comprehensive Compliance Archive Matrix")
             df_r1_display = df.rename(columns={
-                "date": "Date", "name": "Child Name", "session_type": "Session Type",
+                "date": "Date", "name": "Child Name", "session_type": "Session Type", 
                 "check_in": "Sign-In", "check_out": "Sign-Out", "collected_by": "Collected By", "calculated_hours": "NCS Hours"
             })
             st.dataframe(df_r1_display, use_container_width=True)
             csv_r1 = df_r1_display.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Master Overview (CSV)", data=csv_r1, file_name=f"ncs_master_{sel_site.lower()}.csv", mime="text/csv", key="dl_r1")
+            st.download_button(
+                "📥 Download Master Overview (CSV)", data=csv_r1, 
+                file_name=f"ncs_master_{sel_site.lower()}.csv", mime="text/csv", key="dl_r1"
+            )
 
         with rep_tab2:
             st.subheader("👦 Student Hours Claim Summary")
@@ -443,84 +434,10 @@ elif page == "NCS Compliance":
             df_r2 = df_r2.sort_values(by="Total Claimed Hours", ascending=False)
             st.dataframe(df_r2, use_container_width=True)
             csv_r2 = df_r2.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Hours Summary (CSV)", data=csv_r2, file_name=f"ncs_summary_{sel_site.lower()}.csv", mime="text/csv", key="dl_r2")
-
-        with rep_tab3:
-            st.subheader("🌅 Club & Session Type Breakdown")
-            df_r3 = df.groupby("session_type")["calculated_hours"].agg(["sum", "count"]).reset_index()
-            df_r3.columns = ["Session Type", "Total Accumulated Hours", "Total Student Checkouts"]
-            st.dataframe(df_r3, use_container_width=True)
-            csv_r3 = df_r3.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Session Breakdown (CSV)", data=csv_r3, file_name=f"ncs_sessions_{sel_site.lower()}.csv", mime="text/csv", key="dl_r3")
-
-        with rep_tab4:
-            st.subheader("🔑 Collector Authorization Verification Log")
-            df_r4 = df[["date", "name", "check_out", "collected_by"]].copy()
-            df_r4.columns = ["Date", "Child Name", "Sign-Out Time", "Collector Identity Given"]
-            df_r4 = df_r4.sort_values(by="Date", ascending=False)
-            st.dataframe(df_r4, use_container_width=True)
-            csv_r4 = df_r4.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Collector Log (CSV)", data=csv_r4, file_name=f"ncs_collectors_{sel_site.lower()}.csv", mime="text/csv", key="dl_r4")
-
-        # ----------------------------------------------------------------------
-        # UPGRADED REPORT 5: ACCURATE SHORTFALL AUDIT BASED ON CHIT ENTRIES
-        # ----------------------------------------------------------------------
-        with rep_tab5:
-            st.subheader("📉 NCS Unused Hours & Shortfall Audit")
-            st.caption("Evaluates actual weekly usage margins against CHIT awarded fund caps.")
-            
-            if not children_meta_data:
-                st.info("No child profile data exists to compile audit bounds.")
-            else:
-                # 1. Convert master profiles containing ncs_funded_hours into a mapping frame
-                df_meta = pd.DataFrame(children_meta_data).rename(columns={"name": "Child Name", "ncs_funded_hours": "NCS Awarded Hours"})
-                
-                # 2. Extract average weekly attended hours from the permanent logs
-                df_calc = df.copy()
-                df_calc["date_parsed"] = pd.to_datetime(df_calc["date"])
-                df_calc["year_week"] = df_calc["date_parsed"].dt.strftime("%Y-%U")
-                
-                # Sum hours up by student for individual calendar weeks
-                df_weekly_attendance = df_calc.groupby(["name", "year_week"])["calculated_hours"].sum().reset_index()
-                
-                # Find the running historical average per student
-                df_avg_actual = df_weekly_attendance.groupby("name")["calculated_hours"].mean().reset_index()
-                df_avg_actual.columns = ["Child Name", "Avg Weekly Attended Hours"]
-                df_avg_actual["Avg Weekly Attended Hours"] = df_avg_actual["Avg Weekly Attended Hours"].round(1)
-                
-                # 3. Merge baseline CHIT targets with real attendance calculations
-                df_unused_report = pd.merge(df_meta, df_avg_actual, on="Child Name", how="inner")
-                
-                # Calculate accurate variance shortfall
-                df_unused_report["Unused Hours Variance"] = df_unused_report["NCS Awarded Hours"] - df_unused_report["Avg Weekly Attended Hours"]
-                df_unused_report["Unused Hours Variance"] = df_unused_report["Unused Hours Variance"].apply(lambda x: max(0.0, round(x, 1)))
-                
-                # Apply precise regulatory Pobal threshold alerts
-                df_unused_report["Pobal Audit Status"] = df_unused_report["Unused Hours Variance"].apply(
-                    lambda x: "🚨 FLAG: Variance > 8 Hours" if x >= 8.0 else "🟢 Compliant"
-                )
-                
-                # Rank at-risk profiles to the very top
-                df_unused_report = df_unused_report.sort_values(by="Unused Hours Variance", ascending=False)
-                
-                # Highlight rows where leakage exceeds the strict statutory 8-hour gap
-                def highlight_pobal_flags(row):
-                    if "🚨" in str(row["Pobal Audit Status"]):
-                        return ['background-color: rgba(255, 75, 75, 0.2)'] * len(row)
-                    return [''] * len(row)
-                
-                styled_df = df_unused_report.style.apply(highlight_pobal_flags, axis=1)
-                st.dataframe(styled_df, use_container_width=True)
-                
-                # Display direct error banner summaries for the onsite manager
-                flagged_count = len(df_unused_report[df_unused_report["Unused Hours Variance"] >= 8.0])
-                if flagged_count > 0:
-                    st.error(f"⚠️ **Pobal Compliance Alert:** There are **{flagged_count} child profile(s)** trending a running weekly variance shortfall above 8 hours. Adjust allocations on the Hive to protect funding balances.")
-                else:
-                    st.success("✅ **Pobal Compliance Check:** All active children are currently within safe attendance tolerance margins.")
-                
-                csv_r5 = df_unused_report.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Download Unused Hours Audit (CSV)", data=csv_r5, file_name=f"ncs_pobal_flags_{sel_site.lower()}.csv", mime="text/csv", key="dl_r5")
+            st.download_button(
+                "📥 Download Hours Summary (CSV)", data=csv_r2, 
+                file_name=f"ncs_summary_{sel_site.lower()}.csv", mime="text/csv", key="dl_r2"
+            )
 # --- 9. ADMIN SETTINGS ---
 elif page == "Admin Settings":
     st.title("⚙️ Admin Settings")
@@ -594,7 +511,6 @@ elif page == "Admin Settings":
                         st.error("❌ Missing Field: You must specify a Child Name to create a database profile.")
                     else:
                         try:
-                            # 1. FIXED: Correct variable name set to match dictionary key below
                             dob_str = new_dob.strftime("%d/%m/%Y") if new_dob else None
                             tr = str(new_dob) if new_dob else None
                             
@@ -619,7 +535,6 @@ elif page == "Admin Settings":
                             st.success(f"🎉 Successfully created active profile for **{new_name}** at {sel_site}!")
                             st.toast("Profile data pipeline updated.")
                         except Exception as db_err:
-                            # 2. FIXED: Removed the extra trailing parenthesis to prevent syntax crashes
                             st.error(f"Failed to save profile record to database: {db_err}")
 
   # ----------------------------------------------------
