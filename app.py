@@ -148,12 +148,9 @@ elif page == "Weekly Planner":
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Sign-Out")
     st.caption("Tap a child's name to select who is collecting them.")
-    
-    # ADDED: Clear visual alert instruction for staff members
     st.info("⚠️ **Important:** If a warning triangle (**⚠️**) is shown next to a child's name, please tap their name and review the allergy and medical notes inside the alert banner before signing them out.")
     
     try:
-        # UPGRADED: Pulling dietary_requirements and medical_notes from the database table
         children_res = supabase.table("children").select(
             "name", "emergency_name", "emergency_phone",
             "pickup_1_name", "pickup_1_phone",
@@ -181,12 +178,9 @@ elif page == "Quick-Tap Board":
             child_name = log['name']
             session_type = log.get('session_type', 'Afterschool')
             
-            # Fetch medical fields for alert status flags
             meta = child_lookup.get(child_name, {})
             has_dietary = meta.get("dietary_requirements") and meta.get("dietary_requirements") != "None"
             has_medical = meta.get("medical_notes") and meta.get("medical_notes") != "None"
-            
-            # Append visual warning badge directly to button text if records exist
             badge = " ⚠️" if (has_dietary or has_medical) else ""
             
             active_child_key = "active_tap_child_id"
@@ -200,7 +194,6 @@ elif page == "Quick-Tap Board":
                     st.rerun()
 
         st.divider()
-
         active_id = st.session_state.get("active_tap_child_id")
         
         if active_id:
@@ -215,43 +208,38 @@ elif page == "Quick-Tap Board":
                 e_phone = meta.get('emergency_phone', 'Not Listed')
                 
                 p1_name = meta.get('pickup_1_name') or "Mom"
-                p1_phone = meta.get('pickup_1_phone') or ""
                 p2_name = meta.get('pickup_2_name') or "Slot 2 (Empty)"
-                p2_phone = meta.get('pickup_2_phone') or ""
                 p3_name = meta.get('pickup_3_name') or "Slot 3 (Empty)"
-                p3_phone = meta.get('pickup_3_phone') or ""
                 
                 with st.container(border=True):
                     st.subheader(f"🔑 Sign-Out: {selected_log['name']}")
                     st.write(f"🎒 *In since {selected_log['check_in']} ({selected_log.get('session_type', 'Afterschool')})*")
                     
-                    # --- CRITICAL MEDICAL/DIETARY ALERT BANNER IN SIGN-OUT WINDOW ---
                     d_notes = meta.get("dietary_requirements", "None")
                     m_notes = meta.get("medical_notes", "None")
                     if d_notes != "None" or m_notes != "None":
-                        with st.expander("🚨 **Critical Profile Care Alert (Tap to View)**", expanded=True):
-                            if d_notes != "None":
-                                st.markdown(f"🥦 **Dietary/Allergies:** {d_notes}")
-                            if m_notes != "None":
-                                st.markdown(f"🩺 **Medical Conditions:** {m_notes}")
-                    
-                    st.warning(f"🚨 **Emergency Contact:** {e_name} — {e_phone}")
-                    
+                    with st.expander("🚨 Critical Profile Care Alert (Tap to View)", expanded=True):
+                        if d_notes != "None":
+                            st.markdown(f"🥦 Dietary/Allergies: {d_notes}")
+                        if m_notes != "None":
+                            st.markdown(f"🩺 Medical Conditions: {m_notes}")
+                            
+                    st.warning(f"🚨 Emergency Contact: {e_name} — {e_phone}")
                     st.write("### Choose Authorized Collector:")
+                    
                     p_cols = st.columns(4)
                     pickups = [p1_name, p2_name, p3_name, "Other / Parent"]
-                    
                     for p_idx, p in enumerate(pickups):
                         with p_cols[p_idx]:
                             if st.button(p, key=f"p_btn_{p_idx}_{active_id}", use_container_width=True):
                                 st.session_state[c_key] = p
                                 st.rerun()
-                    
+                                
                     if current_collector:
-                        st.success(f"Selected Collector: **{current_collector}**")
-                        st.write("✍️ **Collector's Signature:**")
+                        st.success(f"Selected Collector: {current_collector}")
+                        st.write("✍️ Collector's Signature:")
                         
-                        canvas_result = st_canvas(
+                        st_canvas(
                             fill_color="rgba(255, 165, 0, 0.3)",
                             stroke_width=3,
                             stroke_color="#000000",
@@ -268,7 +256,6 @@ elif page == "Quick-Tap Board":
                             if confirm_btn:
                                 now_time = datetime.now().strftime("%H:%M:%S")
                                 calculated_hours = ncs_round(selected_log['check_in'], now_time)
-                                
                                 try:
                                     supabase.table("attendance").update({
                                         "check_out": now_time,
@@ -282,13 +269,12 @@ elif page == "Quick-Tap Board":
                                         del st.session_state[active_child_key]
                                     if c_key in st.session_state:
                                         del st.session_state[c_key]
-                                        
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Failed to submit sign-out: {e}")
                     else:
                         st.info("💡 Please tap one of the names above to select the collector.")
-# --- 7. ATTENDANCE ---
+
 elif page == "Attendance":
     st.title("📋 Live Site Attendance Feed")
     st.caption(f"Quickly check children in or review daily logs for {sel_site}.")
@@ -317,7 +303,6 @@ elif page == "Attendance":
     else:
         session_choice = st.radio("Select Session Type for Tap Sign-In:", ["Afterschool", "Breakfast Club"], horizontal=True)
         kid_cols = st.columns(3)
-        
         for idx, kid_name in enumerate(available_to_signin):
             with kid_cols[idx % 3]:
                 if st.button(f"➕ {kid_name}", key=f"signin_btn_{idx}_{kid_name}", use_container_width=True):
@@ -350,26 +335,25 @@ elif page == "Attendance":
         st.info(f"No attendance logs have been recorded for {sel_site} yet.")
     else:
         df_logs = pd.DataFrame(logs_data)
-        
         if "calculated_hours" not in df_logs.columns:
             df_logs["calculated_hours"] = 0
             
         df_logs_display = df_logs.rename(columns={
-            "date": "Date",
-            "name": "Child Name",
+            "date": "Date", 
+            "name": "Child Name", 
             "session_type": "Session Type",
-            "check_in": "Sign-In",
-            "check_out": "Sign-Out",
-            "collected_by": "Collected By",
+            "check_in": "Sign-In", 
+            "check_out": "Sign-Out", 
+            "collected_by": "Collected By", 
             "calculated_hours": "NCS Hours"
         })
-        
         st.dataframe(
-            df_logs_display,
-            use_container_width=True,
+            df_logs_display, 
+            use_container_width=True, 
             hide_index=True,
             column_order=["Date", "Child Name", "Session Type", "Sign-In", "Sign-Out", "Collected By", "NCS Hours"]
         )
+
 # --- 8. STAFFING REPORT ---
 elif page == "Staffing Report":
     st.title("📋 Daily Staffing & Attendance Report")
