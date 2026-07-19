@@ -64,11 +64,9 @@ def generate_staffing_pdf(df_data, site_name, day_name):
     return bytes(pdf.output())
 # --- 3. NAVIGATION & ADMIN SIDEBAR ---
 sites = ["Elphin", "Ballinameen", "Boyle", "Roscommon", "Keadue"]
-# "Staffing Report" has been added below to restore the missing print/download view
 page = st.sidebar.radio("Navigation", ["Dashboard", "Weekly Planner", "Quick-Tap Board", "Attendance", "NCS Compliance", "Staffing Report", "Admin Settings"])
 sel_site = st.sidebar.selectbox("Current Site Location", sites)
 
-# Add clear visual indicators directly in your navigation frame
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🔐 Admin Dashboard Status")
 
@@ -77,7 +75,6 @@ if is_sunday():
 else:
     st.sidebar.caption("🔵 Live Status: **Standard Weekday Operation**")
 
-# Set to True globally so editing is unlocked every single day
 unlocked = True
 
 # --- 4. DASHBOARD ---
@@ -98,12 +95,10 @@ if page == "Dashboard":
     c1.metric("🌅 Breakfast Club Present", bc_in)
     c2.metric("👦 Afterschool Present", as_in)
 
-# --- 5. WEEKLY PLANNER (PARENTS SUNDAY MESSAGING AREA) ---
+# --- 5. WEEKLY PLANNER ---
 elif page == "Weekly Planner":
     st.title("📅 Parent Weekly Planner")
     st.caption("Let us know what days your child will attend for the upcoming week.")
-    
-    lock_planner = False
     
     try:
         kids = supabase.table("children").select("name").eq("location", sel_site).eq("is_active", True).execute()
@@ -132,9 +127,8 @@ elif page == "Weekly Planner":
             
             st.write("---")
             st.success("🔓 Open: Daily updates and submissions are fully unlocked.")
-            submit_disabled = False
                 
-            submitted = st.form_submit_button("Submit Plan for Next Week", disabled=submit_disabled)
+            submitted = st.form_submit_button("Submit Plan for Next Week")
             
             if submitted:
                 try:
@@ -149,8 +143,7 @@ elif page == "Weekly Planner":
                         }, on_conflict="child_name,day_of_week").execute()
                     st.success(f"Successfully saved schedule preferences for {selected_child}!")
                 except Exception as e:
-                    st.error(f"Failed to submit database entries: {e}")
-
+                    st.error(f"Failed to submit database entries: {e}"
 # --- 6. QUICK-TAP BOARD ---
 elif page == "Quick-Tap Board":
     st.title("🔘 Quick-Tap Sign-Out")
