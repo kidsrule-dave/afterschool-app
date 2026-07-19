@@ -362,25 +362,15 @@ elif page == "Staffing Report":
     report_day = st.selectbox("Select Day to View", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
     
     try:
-        # Fetch upcoming scheduling choices from parent templates
         bookings_res = supabase.table("weekly_bookings").select("child_name, day_of_week, breakfast_club, afterschool").eq("location", sel_site).eq("day_of_week", report_day).execute()
         bookings_data = bookings_res.data
-        
         if not bookings_data:
             st.info(f"No parent schedule templates found for {sel_site} on {report_day} in the system database.")
         else:
-            # Structuring raw payload data into a presentation dataframe
             df_bookings = pd.DataFrame(bookings_data)
-            df_display = df_bookings.rename(columns={
-                "child_name": "Child Name",
-                "breakfast_club": "Breakfast Club",
-                "afterschool": "Afterschool"
-            })
-            
-            # Interactive Grid View layout display
+            df_display = df_bookings.rename(columns={"child_name": "Child Name", "breakfast_club": "Breakfast Club", "afterschool": "Afterschool"})
             st.dataframe(df_display[["Child Name", "Breakfast Club", "Afterschool"]], use_container_width=True, hide_index=True)
             
-            # Count expected attendance metrics to help figure out necessary child-to-staff counts
             total_bc = df_display["Breakfast Club"].sum()
             total_as = df_display["Afterschool"].sum()
             
@@ -390,20 +380,15 @@ elif page == "Staffing Report":
             
             st.markdown("---")
             st.subheader("🖨️ Onsite Print Controls")
-            
-            # Generate the binary payload data structure
             pdf_bytes = generate_staffing_pdf(df_display, sel_site, report_day)
-            
-            # Mount the native file system anchor control
             st.download_button(
-                label="📥 Export & Download Staffing Roster (PDF)",
+                label="📥 Export & Download Staffing Roster (PDF)", 
                 data=pdf_bytes,
-                file_name=f"Staffing_Roster_{sel_site}_{report_day}.pdf",
+                file_name=f"Staffing_Roster_{sel_site}_{report_day}.pdf", 
                 mime="application/pdf",
-                use_container_width=True,
+                use_container_width=True, 
                 key="download_staff_roster_pdf_btn"
             )
-            
     except Exception as e:
         st.error(f"Failed to compile staffing choices layout: {e}")
 # --- 8. NCS COMPLIANCE ---
