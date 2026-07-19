@@ -717,7 +717,15 @@ elif page == "Admin Settings":
                 
                 # Let the admin select which child they want to edit
                 child_names = roster_df['name'].tolist()
+                  # Extract the selected child's current data row securely
+                child_data = roster_df[roster_df['name'] == selected_child_name].iloc[0]
                 
+                # ✅ ADD THIS LINE: Define the missing variable from the dataframe row
+                child_db_id = child_data['id']
+                
+                # Create an inline edit form uniquely keyed to the selected child's ID
+                with st.form(f"edit_child_form_{child_db_id}"):
+                    col_edit1, col_edit2 = st.columns(2)              
                 # ADD THE KEY PARAMETER HERE TO PREVENT DUPLICATE ID CRASHES
                 selected_child_name = st.selectbox(
                     "Select a child to modify:", 
